@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>PROVA CRONOTERMOSTATO LUCIANO</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1"> 
+    <link rel="icon" type="image/png" href="favicon.png">   
+    <!--
+	<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
+    -->
+	<link rel="stylesheet" type="text/css" href="cronocss.css">
+  </head> 
+  <body onresize="aggiustavista()">
+
+	<div  id="impostazioni" class="maschera">
+		<div  id="impostazionicontent" class="impostazionicontent">
+				<label id="labelfisso"><input type="radio" id="programmafisso" name="fissosettimanale" value="fisso" checked="true">Programma fisso<br></label>
+				<label id="labelsettimanale"><input type="radio" id="programmasettimanale" name="fissosettimanale" value="settimanale" >Programma settimanale<br><br></label>
+				<label id="labeleccezione"><input type="radio" id="eccezione" checked="false">Eccezione<br></label>
+				<div id="selprogrammafisso" class="programmasett"><div id="programmafisso" class="scritta">Programma 1</div></div>
+				<div id="selprogrammaeccezione" class="programmasett"><div id="programmaeccezione" class="scritta">Programma 1</div></div>
+				
+				<div id="selprogrammasett1" class="programmasett"><div id="programmasett1" class="scritta">LUN: Programma L</div></div>
+				<div id="selprogrammasett2" class="programmasett"><div id="programmasett2" class="scritta">MAR: Programma M</div></div>
+				<div id="selprogrammasett3" class="programmasett"><div id="programmasett3" class="scritta">MER: Programma M</div></div>
+				<div id="selprogrammasett4" class="programmasett"><div id="programmasett4" class="scritta">GIO: Programma G</div></div>
+				<div id="selprogrammasett5" class="programmasett"><div id="programmasett5" class="scritta">VEN: Programma V</div></div>
+				<div id="selprogrammasett6" class="programmasett"><div id="programmasett6" class="scritta">SAB: Programma S</div></div>
+				<div id="selprogrammasett0" class="programmasett"><div id="programmasett0" class="scritta">DOM: Programma D</div></div>
+
+				<div id="testoinizioeccezione" class="solotesto"><div class="scrittaleft">Data inizio periodo:</div></div>
+				<input type="date" id="datainizioeccezione">
+				<div id="testofineeccezione" class="solotesto"><div class="scrittaleft">Data fine periodo:</div></div>
+				<input type="date" id="datafineeccezione">
+
+				
+
+				<div id="correzionetemperatura" class="solotesto"><div class="scrittaleft">Correzione °C</div></div>
+			    <div id="correzionetemperaturavalore" class="valori"><div id="correzionescritta" class="scritta">-0.1 </div></div>
+					<div id="correzionepiu" class="programmasett" ><div id= "scrittacorrezione+" class="scritta">+</div></div>
+					<div id="correzionemeno" class="programmasett" ><div id= "scrittacorrezione-" class="scritta">-</div></div>
+				
+				<div id="isteresitemperatura" class="solotesto"><div class="scrittaleft">Isteresi °C</div></div>
+				<div id="isteresitemperaturavalore" class="valori"><div id="isteresiscritta" class="scritta">-0.1</div></div>
+					<div id="isteresipiu" class="programmasett" ><div id= "scrittaisteresi+" class="scritta">+</div></div>
+					<div id="isteresimeno" class="programmasett" ><div id= "scrittaisteresi-" class="scritta">-</div></div>
+				
+				
+			
+
+				<div id="impostazioniannulla" class="selprogramma"><div class="scritta">ANNULLA</div></div>
+				<div id="impostazionisalva" class="selprogramma"><div class="scritta">SALVA</div></div>
+
+		</div>	
+	</div>	
+
+	<div  id="nprogrammasel" class="maschera">
+		<div  id="nprogrammacontent" class="nprogrammacontent">
+			<div id="nprogrammatesto"> <div class="scritta"> Scegli un programma </div></div>
+			<div id="nprogrammasel0" class="nprogrammasel"><div id="nprogrammaselscritta0"class="scritta">Programma 1</div></div>
+			<div id="nprogrammasel1" class="nprogrammasel"><div id="nprogrammaselscritta1"class="scritta">Programma 2</div></div>
+			<div id="nprogrammasel2" class="nprogrammasel"><div id="nprogrammaselscritta2"class="scritta">Programma 3</div></div>
+			<div id="nprogrammasel3" class="nprogrammasel"><div id="nprogrammaselscritta3"class="scritta">Programma 4</div></div>
+			<div id="nprogrammaselannulla" class="nprogrammasel"><div class="scritta">ANNULLA</div></div>
+			<div id="nprogrammaselsalva" class="nprogrammasel"><div class="scritta">SALVA</div></div>
+
+		</div>
+	</div>
+	  
+	<div  id="qualeprogramma" class="maschera">
+		<div  id="qualeprogrammacontent" class="qualeprogrammacontent">
+			<div id="qualeprogrammatesto"> <div class="scritta"> Su quale programma vuoi salvare<br>le modifiche che hai effettuato? </div></div>
+			<div id="selprogramma0" class="selprogramma"><div id="selprogrammascritta0"class="scritta">Programma 1</div></div>
+			<div id="selprogramma1" class="selprogramma"><div id="selprogrammascritta1" class="scritta">Programma 2</div></div>
+			<div id="selprogramma2" class="selprogramma"><div id="selprogrammascritta2"class="scritta">Programma 3</div></div>
+			<div id="selprogramma3" class="selprogramma"><div id="selprogrammascritta3" class="scritta">Programma 4</div></div>
+			<div id="selprogrammaannulla" class="selprogramma"><div class="scritta">ANNULLA</div></div>
+			<div id="selprogrammasalva" class="selprogramma"><div class="scritta">SALVA</div></div>
+			<div id="selprogrammacambianome" class="selprogramma"><div class="scritta">CAMBIA NOME</div></div>
+			<input type="text" id="nomebanco" name="lname" maxlength="10">
+			
+
+		</div>
+	</div>	
+  
+	  
+	<div class="content">
+
+	  
+        
+
+        <div id="varie" class="card varie">
+			<div  id="boxtemperatura" class="boxmisure">
+				<div id="valoretemperatura">00.0 ^C</div>
+			</div>
+	        <div id="boxumidita" class="boxmisure">
+				<div id="valoreumidita">00 %</div>
+			</div>
+    
+
+			<div  id="pulsantiera"  class="pulsantiera" >
+				<div  id="bottoni" class="bottoni">
+					<label><input type="radio" id="tipografico" name="tipodisplay" value="grafico" checked="true">GRAFICO<br></label>
+					<label><input type="radio" id="tipocursori" name="tipodisplay" value="cursori" >CURSORI<br><br></label>
+					
+					<label>Visualizza: <br></label>
+					<label><input type="radio" id="veditemperatura" checked="true" >Temperatura<br></label>
+					<label><input type="radio" id="vediumidita" >Umidita'<br></label>
+					<label><input type="radio" id="vedibarra" >Curs. Attuale<br><br></label>
+				</div>
+			<button id="invia" class="pulsantelegno bottoneinvia">SALVA</button>
+			<button id="annulla" class="pulsantelegno bottoneannulla">ANNULLA</button>
+			<div id="day0" class="pulsantelegno pday" ><div class="scritta">DOM</div></div>
+			<div id="day1" class="pulsantelegno pday" ><div class="scritta">LUN</div></div>
+			<div id="day2" class="pulsantelegno pday" ><div class="scritta">MAR</div></div>
+			<div id="day3" class="pulsantelegno pday" ><div class="scritta">MER</div></div>
+			<div id="day4" class="pulsantelegno pday" ><div class="scritta">GIO</div></div>
+			<div id="day5" class="pulsantelegno pday" ><div class="scritta">VEN</div></div>
+			<div id="day6" class="pulsantelegno pday" ><div class="scritta">SAB</div></div>
+
+
+			<div  id="automan"  class="automan" >	
+				<div id="manuale" class="pulsantelegno pulsantelargo" ><div id= "scrittamanuale" class="scritta">MANUALE - XX.X ^C</div></div>
+				<div id="automatico" class="pulsantelegno pulsantelargo" ><div id= "scrittaautomatico" class="scritta">AUTOMATICO</div></div>	
+				<div id="onoff" class="pulsantelegno pulsantelargo" ><div id= "scrittaonoff" class="scritta">OFF</div></div>
+	
+				<div id="manualepiu" class="pulsantelegno manualepiumeno" ><div id= "scrittamanuale+" class="scritta">+</div></div>
+				<div id="manualemeno" class="pulsantelegno manualepiumeno" ><div id= "scrittamanuale-" class="scritta">-</div></div>
+
+
+			</div> 
+			</div> 
+
+        </div>
+
+	  
+	  
+	    <div  id="intesta"  class="card grafico" >
+	        <canvas id="gaugetemp">	</canvas> 
+			<canvas id="gaugeRH">	</canvas>
+
+
+			<!-- orologio è
+			<div id="clock" class="dark">
+	
+				<div id="display2" class="display">
+					<div class="digits"></div>	
+				</div>
+				
+				<div id="display" class="display">
+					<div class="weekdays"></div>
+					<div class="digits"></div>
+				</div>
+	
+			</div>    -->
+			<div id="orologio">
+				<div id="orologiodata" >27/01/2023</div>
+				<div id="orologioora" >16:56</div>
+				
+			</div>
+			<div id="ledacceso" >NON SO</div>
+			<div id="quantotempo"> ACCESO OGGI X MINUTI</div>
+		</div>
+
+	  
+		<div id="cursoridiv" class="card cursori">
+        
+	        <canvas id="canvascrono"> </canvas> 
+			<div id="pulsantimezzora">
+					<label><input type="radio" id="inunora" name="tipomezzora"  checked="true">1 ora<br></label>
+					<label></label><input type="radio" id="inmezzora" name="tipomezzora" "cursori" >1/2 ora<br><br></label>
+			</div>
+
+			<div id="programmi" >
+				<div id="programma0" class="programma"><div id="programmascritta0" class="scritta">Programma 1</div></div>
+				<div id="programma1" class="programma"><div id="programmascritta1" class="scritta">Programma 2</div></div>
+				<div id="programma2" class="programma"><div id="programmascritta2" class="scritta">Programma 3</div></div>
+				<div id="programma3" class="programma"><div id="programmascritta3" class="scritta">Programma 4</div></div>
+			</div>
+				<div id="comandoimpostazioni" class="programma"><div id="coandoimpostazioniscritta" class="scritta">IMPOSTAZIONI</div></div>
+
+		</div>
+
+    
+    </div>
+    <script src="jquery-2.1.1.min.js"></script>
+    <script src="gauge.min.js"></script>
+	<script src="gaugecode.js"></script>
+    <script src="cronocode.js"></script>
+    
+  </body>
+</html>
