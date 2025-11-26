@@ -4,6 +4,7 @@
  */
 
 #include "wifi.h"
+#include "http_server.h"
 #include "comune.h"
 #include "credentials.h"
 
@@ -23,18 +24,11 @@
 
 static const char *TAG = "WIFI";
 
-// Forward declarations and temporary stubs
-// TODO: These will be implemented when we add http_server, telnet, time_sync modules
-
-static void start_webserver_if_not_running(void) {
-    // TODO: implement when http_server is added
-    ESP_LOGI(TAG, "start_webserver_if_not_running() - stub");
-}
-
-static void stop_webserver(void) {
-    // TODO: implement when http_server is added
-    ESP_LOGI(TAG, "stop_webserver() - stub");
-}
+// Forward declarations for functions not yet implemented
+// void telnet_start(int port);      // TODO: implement when we add telnet
+// void telnet_stop(void);           // TODO
+// void time_sync_start(void);       // TODO: implement when we add time_sync
+// void time_sync_stop(void);        // TODO
 
 // ============================================================================
 // WebSocket Client Management

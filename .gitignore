@@ -8,6 +8,9 @@
 # Credentials (IMPORTANT: don't commit WiFi passwords!)
 include/credentials.h
 
+# Project documentation (local only)
+CLAUDE.md
+
 # Build artifacts (except firmware.bin and spiffs.bin)
 *.o
 *.elf
