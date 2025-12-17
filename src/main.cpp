@@ -18,6 +18,8 @@
 #include "comune.h"
 #include "wifi.h"
 #include "storage_manager.h"
+#include "time_sync.h"
+#include "esp_wifi.h"
 
 static const char *TAG = "MAIN";
 
@@ -57,20 +59,38 @@ static void thermostat_task(void *pvParameters)
 }
 
 /**
- * @brief Task di diagnostica (opzionale)
+ * @brief Task di status (stampa ogni secondo)
  */
-static void diag_task(void *pvParameters)
+static void status_task(void *pvParameters)
 {
-    ESP_LOGI(TAG, "Diagnostics task started on core %d", xPortGetCoreID());
+    ESP_LOGI(TAG, "Status task started on core %d", xPortGetCoreID());
+
+    // Wait for WiFi to be ready
+    vTaskDelay(pdMS_TO_TICKS(2000));
 
     while (1) {
-        // Sistema info periodico
-        ESP_LOGI(TAG, "--- System Status ---");
-        ESP_LOGI(TAG, "Free heap: %lu bytes", esp_get_free_heap_size());
-        ESP_LOGI(TAG, "Free PSRAM: %lu bytes", heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
-        ESP_LOGI(TAG, "Uptime: %llu seconds", esp_timer_get_time() / 1000000ULL);
+        char time_str[32];
+        time_get_string(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S");
 
-        vTaskDelay(pdMS_TO_TICKS(30000));  // Ogni 30 secondi
+        // Get WiFi RSSI
+        wifi_ap_record_t ap_info;
+        int8_t rssi = 0;
+        if (esp_wifi_sta_get_ap_info(&ap_info) == ESP_OK) {
+            rssi = ap_info.rssi;
+        }
+
+        // Placeholder temperature and humidity
+        float temperature = 23.5f;
+        uint8_t humidity = 55;
+
+        // Free heap
+        uint32_t free_heap = esp_get_free_heap_size();
+
+        // Print status line
+        printf("[%s] WiFi:%ddBm T:%.1f°C H:%d%% Heap:%lu\n",
+               time_str, rssi, temperature, humidity, free_heap);
+
+        vTaskDelay(pdMS_TO_TICKS(1000));  // Ogni secondo
     }
 }
 
@@ -206,9 +226,9 @@ extern "C" void app_main(void)
     ESP_LOGI(TAG, "Initializing WiFi...");
     setup_wifi();
 
-    // TODO: Inizializza sincronizzazione tempo
-    // time_sync_setup_timezone();
-    // time_sync_start();
+    // Inizializza sincronizzazione tempo NTP
+    ESP_LOGI(TAG, "Starting NTP time sync...");
+    time_sync_start();
 
     // TODO: Inizializza console/telnet
     // console_start();
@@ -237,15 +257,15 @@ extern "C" void app_main(void)
         0   // Core 0
     );
 
-    // Crea task diagnostica (CORE 1)
+    // Crea task status (CORE 0)
     xTaskCreatePinnedToCore(
-        diag_task,
-        "diagnostics",
-        3072,
+        status_task,
+        "status",
+        4096,
         NULL,
         1,  // Priorità bassa
         NULL,
-        1   // Core 1
+        0   // Core 0
     );
 
     ESP_LOGI(TAG, "Initialization complete. System running.");
