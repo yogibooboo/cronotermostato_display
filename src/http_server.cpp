@@ -6,11 +6,16 @@
 #include "http_server.h"
 #include "wifi.h"
 #include "comune.h"
+#include "storage_manager.h"
 
 #include <string.h>
+#include <stdio.h>
 #include <esp_log.h>
 #include <esp_system.h>
 #include <esp_http_server.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 static const char *TAG = "HTTP_SERVER";
 static httpd_handle_t server = NULL;
@@ -36,133 +41,70 @@ static inline const char* mime_from_path(const char* path) {
 // ============================================================================
 
 /**
- * @brief Root handler - Hello World page
+ * @brief Serve file from SPIFFS
+ */
+static esp_err_t serve_spiffs_file(httpd_req_t *req, const char* filepath) {
+    FILE *fd = fopen(filepath, "r");
+    if (!fd) {
+        ESP_LOGE(TAG, "Failed to open file: %s", filepath);
+        httpd_resp_send_404(req);
+        return ESP_FAIL;
+    }
+
+    // Get file size
+    fseek(fd, 0, SEEK_END);
+    long file_size = ftell(fd);
+    fseek(fd, 0, SEEK_SET);
+
+    // Set content type
+    const char* mime_type = mime_from_path(filepath);
+    httpd_resp_set_type(req, mime_type);
+
+    // Read and send file in chunks
+    char *chunk = (char*)malloc(1024);
+    if (!chunk) {
+        ESP_LOGE(TAG, "Failed to allocate memory for file chunk");
+        fclose(fd);
+        httpd_resp_send_500(req);
+        return ESP_FAIL;
+    }
+
+    size_t read_bytes;
+    do {
+        read_bytes = fread(chunk, 1, 1024, fd);
+        if (read_bytes > 0) {
+            if (httpd_resp_send_chunk(req, chunk, read_bytes) != ESP_OK) {
+                ESP_LOGE(TAG, "Failed to send chunk");
+                free(chunk);
+                fclose(fd);
+                return ESP_FAIL;
+            }
+        }
+    } while (read_bytes > 0);
+
+    // Send empty chunk to signal end
+    httpd_resp_send_chunk(req, NULL, 0);
+
+    free(chunk);
+    fclose(fd);
+
+    ESP_LOGI(TAG, "Served %s (%ld bytes, %s)", filepath, file_size, mime_type);
+    return ESP_OK;
+}
+
+/**
+ * @brief Root handler - Serve index.html from SPIFFS
  */
 static esp_err_t root_handler(httpd_req_t *req) {
-    const char* html =
-        "<!DOCTYPE html>\n"
-        "<html>\n"
-        "<head>\n"
-        "    <meta charset='UTF-8'>\n"
-        "    <meta name='viewport' content='width=device-width, initial-scale=1.0'>\n"
-        "    <title>Cronotermostato ESP32-S3</title>\n"
-        "    <style>\n"
-        "        body {\n"
-        "            font-family: Arial, sans-serif;\n"
-        "            max-width: 800px;\n"
-        "            margin: 50px auto;\n"
-        "            padding: 20px;\n"
-        "            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);\n"
-        "            color: white;\n"
-        "        }\n"
-        "        .container {\n"
-        "            background: rgba(255, 255, 255, 0.1);\n"
-        "            border-radius: 15px;\n"
-        "            padding: 30px;\n"
-        "            backdrop-filter: blur(10px);\n"
-        "            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);\n"
-        "        }\n"
-        "        h1 {\n"
-        "            text-align: center;\n"
-        "            font-size: 2.5em;\n"
-        "            margin-bottom: 10px;\n"
-        "        }\n"
-        "        .subtitle {\n"
-        "            text-align: center;\n"
-        "            font-size: 1.2em;\n"
-        "            opacity: 0.9;\n"
-        "            margin-bottom: 30px;\n"
-        "        }\n"
-        "        .info {\n"
-        "            background: rgba(255, 255, 255, 0.15);\n"
-        "            border-radius: 10px;\n"
-        "            padding: 20px;\n"
-        "            margin: 20px 0;\n"
-        "        }\n"
-        "        .info h3 {\n"
-        "            margin-top: 0;\n"
-        "            border-bottom: 2px solid rgba(255, 255, 255, 0.3);\n"
-        "            padding-bottom: 10px;\n"
-        "        }\n"
-        "        .status {\n"
-        "            display: inline-block;\n"
-        "            padding: 5px 15px;\n"
-        "            background: #4CAF50;\n"
-        "            border-radius: 20px;\n"
-        "            font-weight: bold;\n"
-        "        }\n"
-        "        ul {\n"
-        "            list-style: none;\n"
-        "            padding: 0;\n"
-        "        }\n"
-        "        li {\n"
-        "            padding: 8px 0;\n"
-        "            border-bottom: 1px solid rgba(255, 255, 255, 0.2);\n"
-        "        }\n"
-        "        li:last-child {\n"
-        "            border-bottom: none;\n"
-        "        }\n"
-        "    </style>\n"
-        "</head>\n"
-        "<body>\n"
-        "    <div class='container'>\n"
-        "        <h1>🌡️ Cronotermostato</h1>\n"
-        "        <div class='subtitle'>ESP32-S3 + Display Touch 3.5\"</div>\n"
-        "        \n"
-        "        <div class='info'>\n"
-        "            <h3>Sistema</h3>\n"
-        "            <ul>\n"
-        "                <li><strong>Status:</strong> <span class='status'>Online</span></li>\n"
-        "                <li><strong>Hardware:</strong> JC3248W535EN Module</li>\n"
-        "                <li><strong>MCU:</strong> ESP32-S3 @ 240MHz (Dual Core)</li>\n"
-        "                <li><strong>Flash:</strong> 16 MB</li>\n"
-        "                <li><strong>PSRAM:</strong> 8 MB</li>\n"
-        "            </ul>\n"
-        "        </div>\n"
-        "\n"
-        "        <div class='info'>\n"
-        "            <h3>Funzionalità</h3>\n"
-        "            <ul>\n"
-        "                <li>✅ WiFi connesso</li>\n"
-        "                <li>✅ WebSocket server</li>\n"
-        "                <li>✅ HTTP server</li>\n"
-        "                <li>🚧 Display touch (in sviluppo)</li>\n"
-        "                <li>🚧 Controllo temperatura (in sviluppo)</li>\n"
-        "                <li>🚧 Programmazione oraria (in sviluppo)</li>\n"
-        "            </ul>\n"
-        "        </div>\n"
-        "\n"
-        "        <div class='info'>\n"
-        "            <h3>WebSocket Endpoint</h3>\n"
-        "            <ul>\n"
-        "                <li><strong>URL:</strong> ws://\" + window.location.hostname + \"/ws</li>\n"
-        "                <li><strong>Clients connessi:</strong> <span id='ws-clients'>0</span></li>\n"
-        "            </ul>\n"
-        "        </div>\n"
-        "    </div>\n"
-        "\n"
-        "    <script>\n"
-        "        // Test WebSocket connection\n"
-        "        const ws = new WebSocket('ws://' + window.location.hostname + '/ws');\n"
-        "        \n"
-        "        ws.onopen = function() {\n"
-        "            console.log('WebSocket connected');\n"
-        "        };\n"
-        "        \n"
-        "        ws.onmessage = function(event) {\n"
-        "            console.log('WebSocket message:', event.data);\n"
-        "        };\n"
-        "        \n"
-        "        ws.onerror = function(error) {\n"
-        "            console.error('WebSocket error:', error);\n"
-        "        };\n"
-        "    </script>\n"
-        "</body>\n"
-        "</html>";
+    if (!storage_is_ready()) {
+        ESP_LOGE(TAG, "SPIFFS not ready");
+        const char* error_msg = "SPIFFS not initialized. Please run 'pio run -t uploadfs'";
+        httpd_resp_send_500(req);
+        httpd_resp_send(req, error_msg, HTTPD_RESP_USE_STRLEN);
+        return ESP_FAIL;
+    }
 
-    httpd_resp_set_type(req, "text/html");
-    httpd_resp_send(req, html, HTTPD_RESP_USE_STRLEN);
-    return ESP_OK;
+    return serve_spiffs_file(req, "/spiffs/index.html");
 }
 
 // ============================================================================

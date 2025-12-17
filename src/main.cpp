@@ -17,6 +17,7 @@
 
 #include "comune.h"
 #include "wifi.h"
+#include "storage_manager.h"
 
 static const char *TAG = "MAIN";
 
@@ -191,8 +192,9 @@ extern "C" void app_main(void)
     // Inizializza configurazione di default
     init_default_config();
 
-    // TODO: Inizializza SPIFFS
-    // ESP_ERROR_CHECK(storage_init());
+    // Inizializza SPIFFS
+    ESP_LOGI(TAG, "Initializing SPIFFS...");
+    ESP_ERROR_CHECK(storage_init());
 
     // TODO: Carica configurazione salvata
     // config_load(&g_config);
