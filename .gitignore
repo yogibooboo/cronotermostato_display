@@ -30,6 +30,7 @@ Thumbs.db
 *.bak
 *.old
 *.gattaiola
+data_old/
 
 # Log files
 *.log
