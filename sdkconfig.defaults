@@ -1,0 +1,2 @@
+# LVGL requires a high tick rate for smooth operation
+CONFIG_FREERTOS_HZ=1000

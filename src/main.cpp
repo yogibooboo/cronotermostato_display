@@ -20,6 +20,7 @@
 #include "storage_manager.h"
 #include "time_sync.h"
 #include "esp_wifi.h"
+#include "display_manager.h"
 
 static const char *TAG = "MAIN";
 
@@ -86,6 +87,9 @@ static void status_task(void *pvParameters)
         // Free heap
         uint32_t free_heap = esp_get_free_heap_size();
 
+        // Update display with current status
+        display_update_status(temperature, humidity, false);
+
         // Print status line
         printf("[%s] WiFi:%ddBm T:%.1f°C H:%d%% Heap:%lu\n",
                time_str, rssi, temperature, humidity, free_heap);
@@ -142,10 +146,10 @@ static void print_system_info(void)
              chip_info.features & CHIP_FEATURE_BT ? "BT/" : "",
              chip_info.features & CHIP_FEATURE_BLE ? "BLE/" : "",
              chip_info.features & CHIP_FEATURE_EMB_FLASH ? "Embedded-Flash" : "External-Flash");
-    ESP_LOGI(TAG, "Flash: %lu MB %s", flash_size / (1024 * 1024),
+    ESP_LOGI(TAG, "Flash: %u MB %s", (unsigned int)(flash_size / (1024 * 1024)),
              (chip_info.features & CHIP_FEATURE_EMB_FLASH) ? "embedded" : "external");
-    ESP_LOGI(TAG, "PSRAM: %lu bytes", heap_caps_get_total_size(MALLOC_CAP_SPIRAM));
-    ESP_LOGI(TAG, "Free heap: %lu bytes", esp_get_free_heap_size());
+    ESP_LOGI(TAG, "PSRAM: %u bytes", (unsigned int)heap_caps_get_total_size(MALLOC_CAP_SPIRAM));
+    ESP_LOGI(TAG, "Free heap: %u bytes", (unsigned int)esp_get_free_heap_size());
     ESP_LOGI(TAG, "IDF version: %s", esp_get_idf_version());
     ESP_LOGI(TAG, "");
 }
@@ -240,9 +244,9 @@ extern "C" void app_main(void)
     // TODO: Inizializza sensore temperatura
     // sensor_init();
 
-    // TODO: Inizializza display + touch
-    // display_init();
-    // touch_init();
+    // Inizializza display + touch
+    ESP_LOGI(TAG, "Initializing display...");
+    ESP_ERROR_CHECK(display_init());
 
     ESP_LOGI(TAG, "Starting tasks...");
 
