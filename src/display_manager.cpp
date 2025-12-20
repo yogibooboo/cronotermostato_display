@@ -123,7 +123,7 @@ static void create_page1(void)
 
     lv_obj_t * label = lv_label_create(page1_screen);
     lv_label_set_text(label, "Programmi");
-    lv_obj_set_style_text_font(label, &lv_font_montserrat_28, 0);
+    lv_obj_set_style_text_font(label, &lv_font_montserrat_14, 0);
     lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 20);
 
     // Back button
@@ -148,7 +148,7 @@ static void create_page2(void)
 
     lv_obj_t * label = lv_label_create(page2_screen);
     lv_label_set_text(label, "Storico");
-    lv_obj_set_style_text_font(label, &lv_font_montserrat_28, 0);
+    lv_obj_set_style_text_font(label, &lv_font_montserrat_14, 0);
     lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 20);
 
     // Back button
@@ -173,7 +173,7 @@ static void create_page3(void)
 
     lv_obj_t * label = lv_label_create(page3_screen);
     lv_label_set_text(label, "Impostazioni");
-    lv_obj_set_style_text_font(label, &lv_font_montserrat_28, 0);
+    lv_obj_set_style_text_font(label, &lv_font_montserrat_14, 0);
     lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 20);
 
     // Back button
