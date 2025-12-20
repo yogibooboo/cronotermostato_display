@@ -37,6 +37,24 @@ esp_err_t storage_get_info(size_t *total_bytes, size_t *used_bytes);
  */
 bool storage_is_ready(void);
 
+/**
+ * @brief Unmount SPIFFS filesystem
+ *
+ * Used before OTA updates to prevent concurrent access
+ *
+ * @return ESP_OK on success
+ */
+esp_err_t storage_unmount(void);
+
+/**
+ * @brief Remount SPIFFS filesystem
+ *
+ * Used after OTA updates or when unmount was called
+ *
+ * @return ESP_OK on success
+ */
+esp_err_t storage_remount(void);
+
 #ifdef __cplusplus
 }
 #endif

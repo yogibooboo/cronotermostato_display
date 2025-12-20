@@ -81,3 +81,38 @@ bool storage_is_ready(void)
 {
     return spiffs_mounted;
 }
+
+/**
+ * @brief Unmount SPIFFS filesystem
+ */
+esp_err_t storage_unmount(void)
+{
+    if (!spiffs_mounted) {
+        ESP_LOGW(TAG, "SPIFFS already unmounted");
+        return ESP_OK;
+    }
+
+    ESP_LOGI(TAG, "Unmounting SPIFFS...");
+    esp_err_t ret = esp_vfs_spiffs_unregister(NULL);
+    if (ret == ESP_OK) {
+        spiffs_mounted = false;
+        ESP_LOGI(TAG, "SPIFFS unmounted successfully");
+    } else {
+        ESP_LOGE(TAG, "Failed to unmount SPIFFS: %s", esp_err_to_name(ret));
+    }
+    return ret;
+}
+
+/**
+ * @brief Remount SPIFFS filesystem
+ */
+esp_err_t storage_remount(void)
+{
+    if (spiffs_mounted) {
+        ESP_LOGW(TAG, "SPIFFS already mounted");
+        return ESP_OK;
+    }
+
+    ESP_LOGI(TAG, "Remounting SPIFFS...");
+    return storage_init();
+}

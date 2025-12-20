@@ -7,6 +7,7 @@
 #include "wifi.h"
 #include "comune.h"
 #include "storage_manager.h"
+#include "ota_handlers.h"
 
 #include <string.h>
 #include <stdio.h>
@@ -107,6 +108,36 @@ static esp_err_t root_handler(httpd_req_t *req) {
     return serve_spiffs_file(req, "/spiffs/index.html");
 }
 
+/**
+ * @brief Generic file handler - Serve any file from SPIFFS
+ */
+static esp_err_t file_handler(httpd_req_t *req) {
+    if (!storage_is_ready()) {
+        ESP_LOGE(TAG, "SPIFFS not ready");
+        httpd_resp_send_404(req);
+        return ESP_FAIL;
+    }
+
+    const char *uri = req->uri;
+
+    // Protezione base contro path traversal
+    if (strstr(uri, "..")) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Bad path");
+        return ESP_FAIL;
+    }
+
+    char filepath[520];
+
+    // Mappa route speciali a file HTML
+    if (strcmp(uri, "/update") == 0) {
+        snprintf(filepath, sizeof(filepath), "/spiffs/update.html");
+    } else {
+        snprintf(filepath, sizeof(filepath), "/spiffs%s", uri);
+    }
+
+    return serve_spiffs_file(req, filepath);
+}
+
 // ============================================================================
 // Server Management
 // ============================================================================
@@ -140,7 +171,9 @@ void start_webserver_if_not_running(void) {
     if (httpd_start(&server, &config) == ESP_OK) {
         ESP_LOGI(TAG, "HTTP server started successfully");
 
-        // Register URI handlers
+        // Register URI handlers (ordine importante!)
+
+        // 1. Handler specifici prima
         httpd_uri_t root_uri = {
             .uri       = "/",
             .method    = HTTP_GET,
@@ -149,7 +182,7 @@ void start_webserver_if_not_running(void) {
         };
         httpd_register_uri_handler(server, &root_uri);
 
-        // Register WebSocket handler (from wifi.cpp)
+        // 2. WebSocket handler
         httpd_uri_t ws_uri = {
             .uri       = "/ws",
             .method    = HTTP_GET,
@@ -159,7 +192,28 @@ void start_webserver_if_not_running(void) {
         };
         httpd_register_uri_handler(server, &ws_uri);
 
-        ESP_LOGI(TAG, "Registered handlers: / (GET), /ws (WebSocket)");
+        // 3. Handler /update
+        httpd_uri_t update_uri = {
+            .uri       = "/update",
+            .method    = HTTP_GET,
+            .handler   = file_handler,
+            .user_ctx  = NULL
+        };
+        httpd_register_uri_handler(server, &update_uri);
+
+        // 4. OTA handlers (POST)
+        register_ota_handlers(server);
+
+        // 5. Wildcard handler per file statici (DEVE essere ultimo!)
+        httpd_uri_t file_uri = {
+            .uri       = "/*",
+            .method    = HTTP_GET,
+            .handler   = file_handler,
+            .user_ctx  = NULL
+        };
+        httpd_register_uri_handler(server, &file_uri);
+
+        ESP_LOGI(TAG, "Registered handlers: / /ws /update /ota_* /* (wildcard)");
     } else {
         ESP_LOGE(TAG, "Failed to start HTTP server");
     }

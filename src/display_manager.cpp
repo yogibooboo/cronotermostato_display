@@ -65,21 +65,25 @@ static void create_main_screen(void)
     // Title label
     lv_obj_t * label = lv_label_create(main_screen);
     lv_label_set_text(label, "Cronotermostato");
+    lv_obj_set_style_text_font(label, &lv_font_montserrat_28, 0);
     lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 20);
 
     // Temperature label
     label_temp = lv_label_create(main_screen);
     lv_label_set_text(label_temp, "T: --.-°C");
+    lv_obj_set_style_text_font(label_temp, &lv_font_montserrat_20, 0);
     lv_obj_align(label_temp, LV_ALIGN_CENTER, 0, -40);
 
     // Humidity label
     label_humidity = lv_label_create(main_screen);
     lv_label_set_text(label_humidity, "H: --%");
+    lv_obj_set_style_text_font(label_humidity, &lv_font_montserrat_20, 0);
     lv_obj_align(label_humidity, LV_ALIGN_CENTER, 0, 0);
 
     // Heater status label
     label_heater = lv_label_create(main_screen);
     lv_label_set_text(label_heater, "Caldaia: OFF");
+    lv_obj_set_style_text_font(label_heater, &lv_font_montserrat_20, 0);
     lv_obj_align(label_heater, LV_ALIGN_CENTER, 0, 40);
 
     // Button 1
@@ -119,6 +123,7 @@ static void create_page1(void)
 
     lv_obj_t * label = lv_label_create(page1_screen);
     lv_label_set_text(label, "Programmi");
+    lv_obj_set_style_text_font(label, &lv_font_montserrat_28, 0);
     lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 20);
 
     // Back button
@@ -143,6 +148,7 @@ static void create_page2(void)
 
     lv_obj_t * label = lv_label_create(page2_screen);
     lv_label_set_text(label, "Storico");
+    lv_obj_set_style_text_font(label, &lv_font_montserrat_28, 0);
     lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 20);
 
     // Back button
@@ -167,6 +173,7 @@ static void create_page3(void)
 
     lv_obj_t * label = lv_label_create(page3_screen);
     lv_label_set_text(label, "Impostazioni");
+    lv_obj_set_style_text_font(label, &lv_font_montserrat_28, 0);
     lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 20);
 
     // Back button
@@ -258,7 +265,7 @@ void display_update_status(float temperature, uint8_t humidity, bool heater_on)
     lv_label_set_text(label_humidity, buf);
 
     // Update heater status
-    lv_label_set_text(label_heater, heater_on ? "Caldaia: ON" : "Caldaia: OFF");
+    lv_label_set_text(label_heater, heater_on ? "Caldaia: ON" : "Caldaia: ZOFF");
 
     bsp_display_unlock();
 }
