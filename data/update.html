@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OTA Update - Cronotermostato</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            padding: 30px;
+            max-width: 500px;
+            width: 100%;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 24px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        .upload-section {
+            margin-bottom: 25px;
+            padding: 20px;
+            border: 2px dashed #ddd;
+            border-radius: 8px;
+            background: #f9f9f9;
+        }
+        .upload-section:hover {
+            border-color: #667eea;
+            background: #f5f7ff;
+        }
+        .upload-section h2 {
+            font-size: 18px;
+            color: #444;
+            margin-bottom: 15px;
+        }
+        input[type="file"] {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        button:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .progress {
+            margin-top: 15px;
+            height: 6px;
+            background: #e0e0e0;
+            border-radius: 3px;
+            overflow: hidden;
+            display: none;
+        }
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            width: 0%;
+            transition: width 0.3s;
+        }
+        .status {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 14px;
+            display: none;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .warning {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 13px;
+        }
+        .warning strong {
+            display: block;
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔄 Aggiornamento OTA</h1>
+        <p class="subtitle">Cronotermostato ESP32-S3</p>
+
+        <div class="warning">
+            <strong>⚠️ Attenzione</strong>
+            Dopo l'aggiornamento il dispositivo si riavvierà automaticamente.
+            Non spegnere durante l'upload!
+        </div>
+
+        <div class="upload-section">
+            <h2>📦 Firmware</h2>
+            <input type="file" id="firmware" accept=".bin">
+            <button onclick="uploadFirmware()" id="fwBtn">Carica Firmware</button>
+            <div class="progress" id="fwProgress">
+                <div class="progress-bar" id="fwBar"></div>
+            </div>
+            <div class="status" id="fwStatus"></div>
+        </div>
+
+        <div class="upload-section">
+            <h2>💾 SPIFFS</h2>
+            <input type="file" id="spiffs" accept=".bin">
+            <button onclick="uploadSPIFFS()" id="spiffsBtn">Carica SPIFFS</button>
+            <div class="progress" id="spiffsProgress">
+                <div class="progress-bar" id="spiffsBar"></div>
+            </div>
+            <div class="status" id="spiffsStatus"></div>
+        </div>
+    </div>
+
+    <script>
+        function showStatus(id, message, type) {
+            const el = document.getElementById(id);
+            el.textContent = message;
+            el.className = 'status ' + type;
+            el.style.display = 'block';
+        }
+
+        function showProgress(id, show) {
+            document.getElementById(id).style.display = show ? 'block' : 'none';
+        }
+
+        function updateProgress(id, percent) {
+            document.getElementById(id).style.width = percent + '%';
+        }
+
+        async function uploadFile(endpoint, fileInputId, btnId, progressId, barId, statusId) {
+            const fileInput = document.getElementById(fileInputId);
+            const file = fileInput.files[0];
+
+            if (!file) {
+                showStatus(statusId, '⚠️ Seleziona un file', 'error');
+                return;
+            }
+
+            const btn = document.getElementById(btnId);
+            btn.disabled = true;
+            showProgress(progressId, true);
+            showStatus(statusId, '📤 Upload in corso...', 'info');
+
+            const xhr = new XMLHttpRequest();
+
+            xhr.upload.addEventListener('progress', (e) => {
+                if (e.lengthComputable) {
+                    const percent = (e.loaded / e.total) * 100;
+                    updateProgress(barId, percent);
+                }
+            });
+
+            xhr.addEventListener('load', () => {
+                if (xhr.status === 200) {
+                    updateProgress(barId, 100);
+                    showStatus(statusId, '✅ Aggiornamento completato! Riavvio in corso...', 'success');
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 5000);
+                } else {
+                    showStatus(statusId, '❌ Errore: ' + xhr.statusText, 'error');
+                    btn.disabled = false;
+                }
+            });
+
+            xhr.addEventListener('error', () => {
+                showStatus(statusId, '❌ Errore di rete', 'error');
+                btn.disabled = false;
+                showProgress(progressId, false);
+            });
+
+            xhr.open('POST', endpoint);
+            xhr.send(file);
+        }
+
+        function uploadFirmware() {
+            uploadFile('/ota_firmware', 'firmware', 'fwBtn', 'fwProgress', 'fwBar', 'fwStatus');
+        }
+
+        function uploadSPIFFS() {
+            uploadFile('/ota_spiffs', 'spiffs', 'spiffsBtn', 'spiffsProgress', 'spiffsBar', 'spiffsStatus');
+        }
+    </script>
+</body>
+</html>
