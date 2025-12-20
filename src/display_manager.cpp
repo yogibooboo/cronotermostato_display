@@ -9,6 +9,7 @@
 #include "esp_bsp.h"
 #include "lv_port.h"
 #include "esp_log.h"
+#include <math.h>
 
 static const char *TAG = "DISPLAY";
 
@@ -146,25 +147,44 @@ static void create_page2(void)
 {
     page2_screen = lv_obj_create(NULL);
 
+    // Title
     lv_obj_t * label = lv_label_create(page2_screen);
-    lv_label_set_text(label, "Storico");
-    lv_obj_set_style_text_font(label, &lv_font_montserrat_14, 0);
-    lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 20);
+    lv_label_set_text(label, "Storico Temperature");
+    lv_obj_set_style_text_font(label, &lv_font_montserrat_20, 0);
+    lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 10);
+
+    // Create chart
+    lv_obj_t * chart = lv_chart_create(page2_screen);
+    lv_obj_set_size(chart, 440, 250);
+    lv_obj_align(chart, LV_ALIGN_CENTER, 0, 0);
+    lv_chart_set_type(chart, LV_CHART_TYPE_LINE);
+
+    // Set chart properties
+    lv_chart_set_point_count(chart, 100);
+    lv_chart_set_range(chart, LV_CHART_AXIS_PRIMARY_Y, -100, 100);
+    lv_chart_set_div_line_count(chart, 5, 10);
+
+    // Add data series for sine wave
+    lv_chart_series_t * ser = lv_chart_add_series(chart, lv_palette_main(LV_PALETTE_RED), LV_CHART_AXIS_PRIMARY_Y);
+
+    // Generate sine wave data
+    for(int i = 0; i < 100; i++) {
+        float angle = (float)i / 100.0f * 2.0f * 3.14159f * 2.0f; // 2 complete cycles
+        int value = (int)(sinf(angle) * 80.0f); // Amplitude 80
+        lv_chart_set_next_value(chart, ser, value);
+    }
+
+    lv_chart_refresh(chart);
 
     // Back button
     lv_obj_t * btn_back = lv_btn_create(page2_screen);
     lv_obj_set_size(btn_back, 150, 50);
-    lv_obj_align(btn_back, LV_ALIGN_BOTTOM_MID, 0, -20);
+    lv_obj_align(btn_back, LV_ALIGN_BOTTOM_MID, 0, -10);
     lv_obj_add_event_cb(btn_back, btn_event_handler, LV_EVENT_CLICKED, (void*)(intptr_t)0);
 
     label = lv_label_create(btn_back);
     lv_label_set_text(label, "Indietro");
     lv_obj_center(label);
-
-    // Content
-    label = lv_label_create(page2_screen);
-    lv_label_set_text(label, "Qui verrà visualizzato\nlo storico dei valori");
-    lv_obj_align(label, LV_ALIGN_CENTER, 0, 0);
 }
 
 static void create_page3(void)
