@@ -160,6 +160,23 @@
             </div>
             <div class="status" id="spiffsStatus"></div>
         </div>
+
+        <div class="upload-section">
+            <h2>📄 File Singolo</h2>
+            <p style="font-size: 13px; color: #666; margin-bottom: 10px;">
+                Carica rapidamente un singolo file (es. index.html, update.html)
+            </p>
+            <input type="file" id="singleFile">
+            <button onclick="uploadSingleFile()" id="fileBtn">Carica File</button>
+            <div class="progress" id="fileProgress">
+                <div class="progress-bar" id="fileBar"></div>
+            </div>
+            <div class="status" id="fileStatus"></div>
+        </div>
+
+        <button onclick="goHome()" style="margin-top: 20px; background: #6c757d;">
+            🏠 Torna alla Home
+        </button>
     </div>
 
     <script>
@@ -230,6 +247,60 @@
 
         function uploadSPIFFS() {
             uploadFile('/ota_spiffs', 'spiffs', 'spiffsBtn', 'spiffsProgress', 'spiffsBar', 'spiffsStatus');
+        }
+
+        async function uploadSingleFile() {
+            const fileInput = document.getElementById('singleFile');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                showStatus('fileStatus', '⚠️ Seleziona un file', 'error');
+                return;
+            }
+
+            const filename = file.name;
+            const btn = document.getElementById('fileBtn');
+            btn.disabled = true;
+            showProgress('fileProgress', true);
+            showStatus('fileStatus', `📤 Caricamento di ${filename}...`, 'info');
+
+            const xhr = new XMLHttpRequest();
+
+            xhr.upload.addEventListener('progress', (e) => {
+                if (e.lengthComputable) {
+                    const percent = (e.loaded / e.total) * 100;
+                    updateProgress('fileBar', percent);
+                }
+            });
+
+            xhr.addEventListener('load', () => {
+                if (xhr.status === 200) {
+                    updateProgress('fileBar', 100);
+                    showStatus('fileStatus', `✅ ${filename} caricato con successo!`, 'success');
+                    btn.disabled = false;
+                    fileInput.value = '';
+                    updateProgress('fileBar', 0);
+                    setTimeout(() => {
+                        showProgress('fileProgress', false);
+                    }, 2000);
+                } else {
+                    showStatus('fileStatus', '❌ Errore: ' + xhr.statusText, 'error');
+                    btn.disabled = false;
+                }
+            });
+
+            xhr.addEventListener('error', () => {
+                showStatus('fileStatus', '❌ Errore di rete', 'error');
+                btn.disabled = false;
+                showProgress('fileProgress', false);
+            });
+
+            xhr.open('POST', '/api/upload?file=' + encodeURIComponent(filename));
+            xhr.send(file);
+        }
+
+        function goHome() {
+            window.location.href = '/';
         }
     </script>
 </body>

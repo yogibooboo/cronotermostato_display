@@ -8,6 +8,7 @@
 #include "comune.h"
 #include "storage_manager.h"
 #include "ota_handlers.h"
+#include "log_reader.h"
 
 #include <string.h>
 #include <stdio.h>
@@ -138,6 +139,88 @@ static esp_err_t file_handler(httpd_req_t *req) {
     return serve_spiffs_file(req, filepath);
 }
 
+// Handler per upload di singoli file
+static esp_err_t file_upload_handler(httpd_req_t *req)
+{
+    char filepath[128];
+    char filename[64] = {0};
+
+    // Estrai nome file dalla query string (?file=index.html)
+    size_t buf_len = httpd_req_get_url_query_len(req) + 1;
+    if (buf_len > 1) {
+        char *buf = (char*)malloc(buf_len);
+        if (httpd_req_get_url_query_str(req, buf, buf_len) == ESP_OK) {
+            if (httpd_query_key_value(buf, "file", filename, sizeof(filename)) != ESP_OK) {
+                free(buf);
+                httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Missing 'file' parameter");
+                return ESP_FAIL;
+            }
+        }
+        free(buf);
+    } else {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Missing 'file' parameter");
+        return ESP_FAIL;
+    }
+
+    // Verifica che il nome file sia valido (no path traversal)
+    if (strchr(filename, '/') != NULL || strchr(filename, '\\') != NULL) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid filename");
+        return ESP_FAIL;
+    }
+
+    // Costruisci path completo
+    snprintf(filepath, sizeof(filepath), "/spiffs/%s", filename);
+
+    ESP_LOGI(TAG, "Uploading file: %s (size: %d bytes)", filepath, req->content_len);
+
+    // Apri file per scrittura
+    FILE *f = fopen(filepath, "wb");
+    if (!f) {
+        ESP_LOGE(TAG, "Failed to create file");
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to create file");
+        return ESP_FAIL;
+    }
+
+    // Buffer per ricevere dati
+    char buffer[1024];
+    int remaining = req->content_len;
+    int received;
+
+    while (remaining > 0) {
+        int to_read = remaining > sizeof(buffer) ? sizeof(buffer) : remaining;
+
+        received = httpd_req_recv(req, buffer, to_read);
+        if (received <= 0) {
+            if (received == HTTPD_SOCK_ERR_TIMEOUT) {
+                continue;
+            }
+            fclose(f);
+            ESP_LOGE(TAG, "File reception failed");
+            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to receive file");
+            return ESP_FAIL;
+        }
+
+        if (fwrite(buffer, 1, received, f) != received) {
+            fclose(f);
+            ESP_LOGE(TAG, "Failed to write file");
+            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to write file");
+            return ESP_FAIL;
+        }
+
+        remaining -= received;
+    }
+
+    fclose(f);
+
+    ESP_LOGI(TAG, "File uploaded successfully: %s", filename);
+
+    // Invia risposta di successo
+    httpd_resp_set_type(req, "text/plain");
+    httpd_resp_sendstr(req, "File uploaded successfully");
+
+    return ESP_OK;
+}
+
 // ============================================================================
 // Server Management
 // ============================================================================
@@ -204,7 +287,19 @@ void start_webserver_if_not_running(void) {
         // 4. OTA handlers (POST)
         register_ota_handlers(server);
 
-        // 5. Wildcard handler per file statici (DEVE essere ultimo!)
+        // 5. File upload handler (POST)
+        httpd_uri_t upload_file_uri = {
+            .uri       = "/api/upload",
+            .method    = HTTP_POST,
+            .handler   = file_upload_handler,
+            .user_ctx  = NULL
+        };
+        httpd_register_uri_handler(server, &upload_file_uri);
+
+        // 6. Log API handlers (GET)
+        register_log_handlers(server);
+
+        // 7. Wildcard handler per file statici (DEVE essere ultimo!)
         httpd_uri_t file_uri = {
             .uri       = "/*",
             .method    = HTTP_GET,
@@ -213,7 +308,7 @@ void start_webserver_if_not_running(void) {
         };
         httpd_register_uri_handler(server, &file_uri);
 
-        ESP_LOGI(TAG, "Registered handlers: / /ws /update /ota_* /* (wildcard)");
+        ESP_LOGI(TAG, "Registered handlers: / /ws /update /ota_* /api/upload /api/log /* (wildcard)");
     } else {
         ESP_LOGE(TAG, "Failed to start HTTP server");
     }

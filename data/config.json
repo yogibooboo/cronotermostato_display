@@ -1,0 +1,139 @@
+{
+
+  "network": {
+    "wifi": {
+      "ssid": "YOUR_WIFI_SSID",
+      "password": "YOUR_WIFI_PASSWORD",
+      "hostname": "cronotermostato",
+    },
+    "ntp": {
+      "enabled": true,
+      "server": "pool.ntp.org",
+      "timezone": "CET-1CEST,M3.5.0,M10.5.0/3",
+      "sync_interval_hours": 24
+    },
+    "http_server": {
+      "max_handlers": 16
+    },
+
+  },
+  "thermostat": {
+    "temperature": {
+      "default_setpoint": 20.0,
+      "min_setpoint": 5.0,
+      "max_setpoint": 30.0,
+      "hysteresis": 0.5,
+      "correction_offset": 0.0,
+    },
+
+    "modes": {
+      "current_mode": "auto",
+      "current_state": "on"
+    }
+  },
+  "schedule": {
+    "enabled": true,
+    "slot_duration_minutes": 30,
+    "slots_per_day": 48,
+    "temperature_unit": "celsius_tenths",
+    "programs": [
+      {
+        "id": 0,
+        "name": "Standard",
+        "description": "Temperatura standard settimanale",
+        "slots": [
+          160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 190, 190,
+          210, 210, 210, 210, 210, 210, 210, 210, 210, 210, 210, 210, 210, 210, 210, 210,
+          210, 210, 200, 200, 190, 190, 180, 180, 170, 170, 160, 160, 160, 160, 160, 160
+        ]
+      },
+      {
+        "id": 1,
+        "name": "Sabato",
+        "description": "Programmazione per il sabato",
+        "slots": [
+          160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
+          180, 180, 200, 200, 210, 210, 210, 210, 210, 210, 210, 210, 210, 210, 210, 210,
+          210, 210, 210, 210, 200, 200, 190, 180, 170, 170, 160, 160, 160, 160, 160, 160
+        ]
+      },
+      {
+        "id": 2,
+        "name": "Domenica",
+        "description": "Programmazione per la domenica",
+        "slots": [
+          160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
+          180, 180, 200, 200, 210, 210, 210, 210, 210, 210, 210, 210, 210, 210, 210, 210,
+          210, 210, 210, 210, 200, 200, 190, 180, 170, 170, 160, 160, 160, 160, 160, 160
+        ]
+      },
+      {
+        "id": 3,
+        "name": "Assente",
+        "description": "Casa vuota",
+        "slots": [
+          150, 150, 150, 150, 150, 150, 150, 150, 150, 150, 150, 150, 150, 150, 150, 150,
+          150, 150, 150, 150, 150, 150, 150, 150, 150, 150, 150, 150, 150, 150, 150, 150,
+          150, 150, 150, 150, 150, 150, 150, 150, 150, 150, 150, 150, 150, 150, 150, 150
+        ]
+      },
+      {
+        "id": 4,
+        "name": "Speciale",
+        "description": "Programmazione periodo speciale",
+        "slots": [
+          180, 180, 180, 180, 180, 180, 180, 180, 180, 180, 180, 180, 180, 180, 200, 200,
+          210, 210, 210, 210, 210, 210, 210, 210, 210, 210, 210, 210, 210, 210, 210, 210,
+          210, 210, 210, 210, 210, 210, 200, 200, 190, 190, 180, 180, 180, 180, 180, 180
+        ]
+      }
+    ],
+
+    "weekly_schedule": {
+      "monday": 0,
+      "tuesday": 0,
+      "wednesday": 0,
+      "thursday": 0,
+      "friday": 0,
+      "saturday": 1,
+      "sunday": 2
+    },
+    "exception": {
+      "enabled": false,
+      "start_date": "",
+      "end_date": "",
+      "program_id": 4
+    }
+  },
+
+  "display": {
+    "brightness": 100,
+    "screensaver": {
+      "enabled": false,
+      "timeout_sec": 300,
+      "dim_brightness": 20
+    },
+    "theme": {
+      "primary_color": "#E74C3C",
+      "background_color": "#2C3E50",
+      "text_color": "#ECF0F1"
+    },
+    "fonts": {
+      "title": "montserrat_28",
+      "normal": "montserrat_20",
+      "small": "montserrat_14"
+    }
+  },
+  "logging": {
+    "level": "INFO",
+    "uart_enabled": true,
+    "uart_speed": 115200,
+    "components": {
+      "wifi": "INFO",
+      "display": "INFO",
+      "thermostat": "DEBUG",
+      "ota": "INFO",
+      "storage": "INFO"
+    }
+  }
+}
