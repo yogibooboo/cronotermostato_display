@@ -4,7 +4,7 @@
     "wifi": {
       "ssid": "YOUR_WIFI_SSID",
       "password": "YOUR_WIFI_PASSWORD",
-      "hostname": "cronotermostato",
+      "hostname": "cronotermostato"
     },
     "ntp": {
       "enabled": true,
@@ -14,7 +14,7 @@
     },
     "http_server": {
       "max_handlers": 16
-    },
+    }
 
   },
   "thermostat": {
@@ -23,7 +23,7 @@
       "min_setpoint": 5.0,
       "max_setpoint": 30.0,
       "hysteresis": 0.5,
-      "correction_offset": 0.0,
+      "correction_offset": 0.0
     },
 
     "modes": {
