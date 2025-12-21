@@ -279,26 +279,33 @@
 
             console.log(`Log file: ${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}, ${numSamples} samples`);
 
-            // Leggi records (5 bytes ciascuno)
+            // Leggi records (10 bytes ciascuno - formato history_sample_t)
             const data = [];
             const downsample = 5; // Campiona 1 ogni 5 minuti per ridurre punti
 
             for (let i = 0; i < numSamples; i++) {
+                const minuteOfDay = view.getUint16(offset, true); offset += 2;
                 const temp = view.getInt16(offset, true); offset += 2;
                 const hum = view.getUint8(offset); offset += 1;
-                const heat = view.getUint8(offset); offset += 1;
+                const flags = view.getUint8(offset); offset += 1;
+                const setpoint = view.getInt16(offset, true); offset += 2;
+                const activeBank = view.getUint8(offset); offset += 1;
                 const res = view.getUint8(offset); offset += 1;
+
+                // Estrai flag caldaia (bit 0)
+                const heat = flags & 0x01;
 
                 // Campiona solo 1 ogni N
                 if (i % downsample === 0) {
-                    const hour = Math.floor(i / 60);
-                    const minute = i % 60;
+                    const hour = Math.floor(minuteOfDay / 60);
+                    const minute = minuteOfDay % 60;
 
                     data.push({
                         t: `${String(hour).padStart(2,'0')}:${String(minute).padStart(2,'0')}`,
-                        temp: temp / 10.0,
+                        temp: temp / 100.0,
                         hum: hum,
-                        heat: heat
+                        heat: heat,
+                        setpoint: setpoint / 100.0
                     });
                 }
             }
@@ -315,6 +322,7 @@
             const temperatures = data.data.map(d => d.temp);
             const humidity = data.data.map(d => d.hum);
             const heaterStates = data.data.map(d => d.heat);
+            const setpoints = data.data.map(d => d.setpoint);
 
             // Crea/aggiorna grafico
             const ctx = document.getElementById('temperatureChart').getContext('2d');
@@ -347,6 +355,18 @@
                         tension: 0.4,
                         yAxisID: 'y1',
                         fill: true,
+                        pointRadius: 0,
+                        pointHoverRadius: 5
+                    }, {
+                        label: 'Soglia (°C)',
+                        data: setpoints,
+                        borderColor: 'rgb(75, 192, 192)',
+                        backgroundColor: 'rgba(75, 192, 192, 0.1)',
+                        borderWidth: 2,
+                        borderDash: [5, 5],
+                        tension: 0,
+                        yAxisID: 'y',
+                        fill: false,
                         pointRadius: 0,
                         pointHoverRadius: 5
                     }, {

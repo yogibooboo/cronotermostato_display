@@ -27,12 +27,8 @@ typedef struct __attribute__((packed)) {
     uint8_t reserved;         // Reserved
 } log_header_t;
 
-typedef struct __attribute__((packed)) {
-    int16_t temperature;      // Temperature x10 (e.g., 205 = 20.5°C)
-    uint8_t humidity;         // Humidity % (0-100)
-    uint8_t heater_state;     // Heater state (0=OFF, 1=ON)
-    uint8_t reserved;         // Reserved/flags
-} log_record_t;
+// Note: Using history_sample_t from comune.h (10 bytes per record)
+// This header just defines the log file header structure
 
 /**
  * @brief Register log data HTTP handlers

@@ -83,32 +83,47 @@ esp_err_t log_data_handler(httpd_req_t *req)
              header.year, header.month, header.day, header.num_samples);
     httpd_resp_sendstr_chunk(req, json_buf);
 
-    // Leggi e invia records
+    // Leggi e invia records (formato history_sample_t - 10 bytes)
     // Per ridurre dimensione, campiona ogni N minuti (es. ogni 5 minuti = 288 punti invece di 1440)
     const int downsample = 5;  // Invia 1 punto ogni 5 minuti
-    log_record_t record;
+
+    // Buffer per record (10 bytes)
+    uint8_t record[10];
+    bool first_record = true;
 
     for (int i = 0; i < header.num_samples; i++) {
-        if (fread(&record, sizeof(record), 1, f) != 1) {
+        if (fread(record, 10, 1, f) != 1) {
             ESP_LOGW(TAG, "Failed to read record %d", i);
             break;
         }
 
         // Campiona dati
         if (i % downsample == 0) {
-            // Calcola ora/minuto
-            int hour = i / 60;
-            int minute = i % 60;
+            // Parse record (history_sample_t format)
+            uint16_t minute_of_day = record[0] | (record[1] << 8);
+            int16_t temp = (int16_t)(record[2] | (record[3] << 8));
+            uint8_t hum = record[4];
+            uint8_t flags = record[5];
+            int16_t setpoint = (int16_t)(record[6] | (record[7] << 8));
 
-            // Converti temperatura da decimi a float
-            float temp = record.temperature / 10.0f;
+            // Calcola ora/minuto
+            int hour = minute_of_day / 60;
+            int minute = minute_of_day % 60;
+
+            // Converti temperatura e setpoint da centesimi a float
+            float temp_f = temp / 100.0f;
+            float setpoint_f = setpoint / 100.0f;
+
+            // Estrai stato caldaia (bit 0 dei flags)
+            uint8_t heat = flags & 0x01;
 
             snprintf(json_buf, sizeof(json_buf),
-                     "%s{\"t\":\"%02d:%02d\",\"temp\":%.1f,\"hum\":%d,\"heat\":%d}",
-                     (i == 0) ? "" : ",",
-                     hour, minute, temp, record.humidity, record.heater_state);
+                     "%s{\"t\":\"%02d:%02d\",\"temp\":%.2f,\"hum\":%d,\"heat\":%d,\"setpoint\":%.2f}",
+                     first_record ? "" : ",",
+                     hour, minute, temp_f, hum, heat, setpoint_f);
 
             httpd_resp_sendstr_chunk(req, json_buf);
+            first_record = false;
         }
     }
 

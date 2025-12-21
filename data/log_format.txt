@@ -13,18 +13,25 @@ Offset 8:     Giorno (1-31)
 Offset 9-10:  Numero campioni (uint16_t, little endian, max 1440 = 24h x 60min)
 Offset 11:    Riservato (0x00)
 
-RECORD (5 bytes per campione):
--------------------------------
-Offset 0-1:   Temperatura x10 (int16_t, little endian, es. 205 = 20.5°C)
-Offset 2:     Umidità % (uint8_t, 0-100)
-Offset 3:     Stato caldaia (uint8_t, 0=OFF, 1=ON)
-Offset 4:     Riservato/Flags (uint8_t)
+RECORD (10 bytes per campione - history_sample_t):
+---------------------------------------------------
+Offset 0-1:   Minuto del giorno (uint16_t, little endian, 0-1439)
+Offset 2-3:   Temperatura x100 (int16_t, little endian, es. 2050 = 20.50°C)
+Offset 4:     Umidità % (uint8_t, 0-100)
+Offset 5:     Flags (uint8_t):
+                bit 0: caldaia ON/OFF (relay_on)
+                bit 1: modalità manuale
+                bit 2: eccezione attiva
+                bit 3-7: riservati
+Offset 6-7:   Soglia attiva x100 (int16_t, little endian, es. 2100 = 21.00°C)
+Offset 8:     Banco programma attivo (uint8_t, 0-3)
+Offset 9:     Riservato (uint8_t)
 
 DIMENSIONE FILE:
 ----------------
 Header: 12 bytes
-Record: 5 bytes x num_campioni
-Totale per 1440 campioni (1 al minuto per 24h): 12 + (5 x 1440) = 7212 bytes
+Record: 10 bytes x num_campioni
+Totale per 1440 campioni (1 al minuto per 24h): 12 + (10 x 1440) = 14412 bytes
 
 ESEMPIO:
 --------

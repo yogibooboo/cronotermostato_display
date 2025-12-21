@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Generatore di file di log binari per cronotermostato
-Formato: header (12 bytes) + records (5 bytes ciascuno)
+Formato: header (12 bytes) + records (10 bytes ciascuno - history_sample_t)
 """
 
 import struct
@@ -96,17 +96,27 @@ def generate_day_log(year, month, day, output_file):
 
             humidity = max(30, min(70, humidity))  # Clamp 30-70%
 
-            # Converti temperatura in decimi (int16)
-            temp_tenths = int(round(temp * 10))
+            # Converti temperatura e setpoint in centesimi (int16)
+            temp_centesimi = int(round(temp * 100))
+            setpoint_centesimi = int(round(setpoint * 100))
 
-            # Scrivi record (5 bytes)
-            f.write(struct.pack('<h', temp_tenths))  # 2 bytes: temp x10 (signed)
-            f.write(struct.pack('B', humidity))      # 1 byte: humidity
-            f.write(struct.pack('B', heater_on))     # 1 byte: heater state
-            f.write(struct.pack('B', 0))             # 1 byte: reserved
+            # Flags byte (bit 0: relay_on)
+            flags = 0x01 if heater_on else 0x00
+
+            # Banco attivo (simula rotazione tra i 4 programmi)
+            active_bank = (hour // 6) % 4  # Cambia banco ogni 6 ore
+
+            # Scrivi record (10 bytes - history_sample_t)
+            f.write(struct.pack('<H', minute))           # 2 bytes: minute_of_day
+            f.write(struct.pack('<h', temp_centesimi))   # 2 bytes: temp x100 (signed)
+            f.write(struct.pack('B', humidity))          # 1 byte: humidity
+            f.write(struct.pack('B', flags))             # 1 byte: flags
+            f.write(struct.pack('<h', setpoint_centesimi)) # 2 bytes: setpoint x100
+            f.write(struct.pack('B', active_bank))       # 1 byte: active_bank
+            f.write(struct.pack('B', 0))                 # 1 byte: reserved
 
     print(f"Generated: {output_file}")
-    print(f"  Size: {12 + num_samples * 5} bytes")
+    print(f"  Size: {12 + num_samples * 10} bytes")
     print(f"  Date: {year}-{month:02d}-{day:02d}")
     print(f"  Samples: {num_samples}")
 
