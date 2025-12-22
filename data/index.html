@@ -360,7 +360,7 @@
                 if (isPanning) {
                     const deltaX = e.offsetX - panStartX;
                     const panAmount = deltaX / canvas.width;
-                    chart.pan({ x: panAmount * 1000 }, undefined, 'default');  // Aumentato da 100 a 1000 per velocità
+                    chart.pan({ x: panAmount * 1000 }, undefined, 'none');  // 'none' per movimento immediato senza effetto molla
                     panStartX = e.offsetX;
                 }
             });
