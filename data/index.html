@@ -10,7 +10,6 @@
             const script = document.createElement('script');
             script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js';
             script.onerror = function() {
-                console.log('CDN non disponibile, carico Chart.js locale');
                 const localScript = document.createElement('script');
                 localScript.src = '/chart.min.js';
                 document.head.appendChild(localScript);
@@ -23,7 +22,6 @@
             const script = document.createElement('script');
             script.src = 'https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js';
             script.onerror = function() {
-                console.log('CDN zoom plugin non disponibile, carico versione locale');
                 const localScript = document.createElement('script');
                 localScript.src = '/chartjs-plugin-zoom.min.js';
                 document.head.appendChild(localScript);
@@ -53,7 +51,6 @@
             border-radius: 15px;
             box-shadow: 0 10px 40px rgba(0,0,0,0.2);
             padding: 30px;
-            position: relative;
         }
 
         h1 {
@@ -78,11 +75,6 @@
             align-items: center;
         }
 
-        label {
-            font-weight: 600;
-            color: #555;
-        }
-
         input[type="date"] {
             padding: 10px 15px;
             border: 2px solid #ddd;
@@ -99,40 +91,47 @@
             font-size: 14px;
             font-weight: 600;
             cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
+            transition: transform 0.2s;
         }
 
         button:hover {
             transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
         }
 
-        /* --- Pannello Valori Fisso --- */
+        /* Contenitore grafico con legenda sovrapposta */
+        .chart-wrapper {
+            position: relative;
+            height: 500px;
+            margin-bottom: 20px;
+        }
+
         #fixed-tooltip {
-            background: #f8f9fa;
+            position: absolute;
+            top: 10px;
+            left: 60px;
+            z-index: 10;
+            background: rgba(255, 255, 255, 0.85);
             border: 1px solid #ddd;
-            border-radius: 8px;
-            padding: 12px;
-            min-height: 50px;
-            margin-bottom: 15px;
+            border-radius: 6px;
+            padding: 8px 12px;
+            pointer-events: none; /* Fondamentale per far passare lo zoom al canvas */
             display: flex;
-            justify-content: space-around;
-            align-items: center;
-            box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
-            font-size: 0.95em;
-            flex-wrap: wrap;
-            gap: 10px;
+            flex-direction: column;
+            gap: 2px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            font-size: 0.85em;
         }
 
-        .tooltip-val { font-weight: bold; color: #333; margin-left: 5px; }
+        .t-row { display: flex; justify-content: space-between; gap: 15px; }
+        .tooltip-label { color: #666; }
+        .tooltip-val { font-weight: bold; color: #333; }
         .t-temp { color: #ff6384; }
         .t-hum { color: #36a2eb; }
         .t-set { color: #4bc0c0; }
 
         .chart-container {
-            position: relative;
-            height: 500px;
-            margin-bottom: 20px;
+            width: 100%;
+            height: 100%;
         }
 
         .stats {
@@ -150,36 +149,11 @@
             box-shadow: 0 4px 6px rgba(0,0,0,0.05);
         }
 
-        .stat-card h3 {
-            font-size: 0.9em;
-            color: #666;
-            margin-bottom: 10px;
-            text-transform: uppercase;
-        }
+        .stat-card h3 { font-size: 0.9em; color: #666; margin-bottom: 10px; text-transform: uppercase; }
+        .stat-card .value { font-size: 1.8em; font-weight: bold; color: #333; }
 
-        .stat-card .value {
-            font-size: 1.8em;
-            font-weight: bold;
-            color: #333;
-        }
-
-        #loading {
-            text-align: center;
-            padding: 20px;
-            color: #667eea;
-            font-weight: bold;
-        }
-
-        #error-message {
-            background: #fee;
-            color: #c33;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            display: none;
-            text-align: center;
-            border: 1px solid #f88;
-        }
+        #loading { text-align: center; padding: 20px; color: #667eea; font-weight: bold; }
+        #error-message { background: #fee; color: #c33; padding: 15px; border-radius: 8px; display: none; text-align: center; }
     </style>
 </head>
 <body>
@@ -197,18 +171,20 @@
         </div>
 
         <div id="error-message"></div>
-        <div id="loading" style="display: none;">Caricamento dati in corso...</div>
+        <div id="loading" style="display: none;">Caricamento dati...</div>
 
-        <!-- Pannello Valori Correnti Fisso -->
-        <div id="fixed-tooltip">
-            <div>Ora: <span id="val-time" class="tooltip-val">--:--</span></div>
-            <div>Temp: <span id="val-temp" class="tooltip-val t-temp">--.-</span>°C</div>
-            <div>Umidità: <span id="val-hum" class="tooltip-val t-hum">--</span>%</div>
-            <div>Setpoint: <span id="val-set" class="tooltip-val t-set">--.-</span>°C</div>
-        </div>
-
-        <div class="chart-container">
-            <canvas id="temperatureChart"></canvas>
+        <div class="chart-wrapper">
+            <!-- Pannello Valori Sovrapposto -->
+            <div id="fixed-tooltip">
+                <div class="t-row"><span class="tooltip-label">Ora:</span> <span id="val-time" class="tooltip-val">--:--</span></div>
+                <div class="t-row"><span class="tooltip-label">Temp:</span> <span id="val-temp" class="tooltip-val t-temp">--.-°C</span></div>
+                <div class="t-row"><span class="tooltip-label">Umidità:</span> <span id="val-hum" class="tooltip-val t-hum">--%</span></div>
+                <div class="t-row"><span class="tooltip-label">Setpoint:</span> <span id="val-set" class="tooltip-val t-set">--.-°C</span></div>
+            </div>
+            
+            <div class="chart-container">
+                <canvas id="temperatureChart"></canvas>
+            </div>
         </div>
 
         <div class="stats" id="stats"></div>
@@ -232,10 +208,10 @@
 
             try {
                 const response = await fetch(`/api/log/raw?date=${dateStr}`);
-                if (!response.ok) throw new Error(`Dati non trovati per la data selezionata`);
+                if (!response.ok) throw new Error(`Dati non trovati`);
                 const arrayBuffer = await response.arrayBuffer();
                 const parsedData = parseBinaryLog(arrayBuffer);
-                if (parsedData.length === 0) throw new Error("Il file log non contiene dati validi.");
+                if (parsedData.length === 0) throw new Error("File log non valido.");
                 renderChart(parsedData);
                 updateStats(parsedData);
             } catch (error) {
@@ -301,14 +277,12 @@
                             external: function(context) {
                                 const {tooltip} = context;
                                 if (tooltip.opacity === 0) return;
-
-                                const dataIndex = tooltip.dataPoints[0].dataIndex;
-                                const item = data[dataIndex];
-
+                                const index = tooltip.dataPoints[0].dataIndex;
+                                const item = data[index];
                                 document.getElementById('val-time').textContent = item.time;
-                                document.getElementById('val-temp').textContent = item.temp !== null ? item.temp.toFixed(1) : '--.-';
-                                document.getElementById('val-hum').textContent = item.hum !== null ? item.hum : '--';
-                                document.getElementById('val-set').textContent = item.setpoint !== null ? item.setpoint.toFixed(1) : '--.-';
+                                document.getElementById('val-temp').textContent = (item.temp?.toFixed(1) || '--.-') + '°C';
+                                document.getElementById('val-hum').textContent = (item.hum || '--') + '%';
+                                document.getElementById('val-set').textContent = (item.setpoint?.toFixed(1) || '--.-') + '°C';
                             }
                         },
                         zoom: {
@@ -324,8 +298,8 @@
                         }
                     },
                     scales: {
-                        y: { position: 'left', min: 10, max: 32, title: { display: true, text: 'Temp (°C)' } },
-                        y1: { position: 'right', min: 0, max: 100, grid: { drawOnChartArea: false }, title: { display: true, text: 'Umidità (%)' } }
+                        y: { position: 'left', min: 10, max: 32 },
+                        y1: { position: 'right', min: 0, max: 100, grid: { drawOnChartArea: false } }
                     }
                 }
             });
@@ -344,9 +318,9 @@
 
             const hCount = heater.filter(h => h === 1).length * 5;
             document.getElementById('stats').innerHTML = `
-                <div class="stat-card"><h3>Media Temp.</h3><div class="value">${avgTemp}°C</div></div>
-                <div class="stat-card"><h3>Min/Max Temp.</h3><div class="value">${minTemp}/${maxTemp}°C</div></div>
-                <div class="stat-card"><h3>Media Umid.</h3><div class="value">${avgHum}%</div></div>
+                <div class="stat-card"><h3>Media Temp</h3><div class="value">${avgTemp}°C</div></div>
+                <div class="stat-card"><h3>Min/Max</h3><div class="value">${minTemp}/${maxTemp}°C</div></div>
+                <div class="stat-card"><h3>Umidità Media</h3><div class="value">${avgHum}%</div></div>
                 <div class="stat-card"><h3>Caldaia</h3><div class="value">${Math.floor(hCount/60)}h ${hCount%60}m</div></div>`;
         }
         window.onload = loadLogData;
