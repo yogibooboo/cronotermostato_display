@@ -200,7 +200,7 @@
         </div>
 
         <div class="commands-help">
-            <b>Rotella</b>: zoom X  •  <b>Trascina</b>: zoom area  •  <b>Destro+Trascina</b>: pan
+            <b>Rotella</b>: zoom X  •  <b>Trascina</b>: zoom area  •  <b>Centrale+Trascina</b>: pan
         </div>
 
         <div class="stats" id="stats"></div>
@@ -340,16 +340,13 @@
                 chart.zoom({ x: zoomFactor, focalPoint: { x: e.offsetX } });
             }, { passive: false });
 
-            // Pan custom con tasto destro del mouse
+            // Pan custom con pulsante centrale (rotella premuta)
             let isPanning = false;
             let panStartX = 0;
 
-            canvas.addEventListener('contextmenu', function(e) {
-                e.preventDefault();
-            });
-
             canvas.addEventListener('mousedown', function(e) {
-                if (e.button === 2) {  // Tasto destro
+                if (e.button === 1) {  // Pulsante centrale (rotella)
+                    e.preventDefault();
                     isPanning = true;
                     panStartX = e.offsetX;
                     canvas.style.cursor = 'grab';
@@ -366,7 +363,7 @@
             });
 
             canvas.addEventListener('mouseup', function(e) {
-                if (e.button === 2) {
+                if (e.button === 1) {  // Pulsante centrale
                     isPanning = false;
                     canvas.style.cursor = 'default';
                 }
