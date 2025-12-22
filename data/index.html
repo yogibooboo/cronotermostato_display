@@ -320,7 +320,7 @@
                             },
                             pan: {
                                 enabled: true,
-                                mode: 'x'
+                                mode: 'xy'  // Pan su entrambi gli assi
                             }
                         }
                     },
@@ -340,15 +340,17 @@
                 chart.zoom({ x: zoomFactor, focalPoint: { x: e.offsetX } });
             }, { passive: false });
 
-            // Pan custom con pulsante centrale (rotella premuta)
+            // Pan custom con pulsante centrale (rotella premuta) - X e Y
             let isPanning = false;
             let panStartX = 0;
+            let panStartY = 0;
 
             canvas.addEventListener('mousedown', function(e) {
                 if (e.button === 1) {  // Pulsante centrale (rotella)
                     e.preventDefault();
                     isPanning = true;
                     panStartX = e.offsetX;
+                    panStartY = e.offsetY;
                     canvas.style.cursor = 'grab';
                 }
             });
@@ -356,9 +358,18 @@
             canvas.addEventListener('mousemove', function(e) {
                 if (isPanning) {
                     const deltaX = e.offsetX - panStartX;
-                    const panAmount = deltaX / canvas.width;
-                    chart.pan({ x: panAmount * 1000 }, undefined, 'none');  // 'none' per movimento immediato senza effetto molla
+                    const deltaY = e.offsetY - panStartY;
+
+                    const panAmountX = deltaX / canvas.width;
+                    const panAmountY = deltaY / canvas.height;
+
+                    chart.pan({
+                        x: panAmountX * 1000,
+                        y: panAmountY * 1000
+                    }, undefined, 'none');
+
                     panStartX = e.offsetX;
+                    panStartY = e.offsetY;
                 }
             });
 
