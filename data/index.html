@@ -31,6 +31,7 @@
             document.head.appendChild(script);
         })();
     </script>
+    
     <style>
         * {
             margin: 0;
@@ -52,20 +53,14 @@
             border-radius: 15px;
             box-shadow: 0 10px 40px rgba(0,0,0,0.2);
             padding: 30px;
+            position: relative;
         }
 
         h1 {
             color: #333;
             text-align: center;
-            margin-bottom: 10px;
-            font-size: 2.5em;
-        }
-
-        .subtitle {
-            text-align: center;
-            color: #666;
             margin-bottom: 30px;
-            font-size: 1.1em;
+            font-size: 2.5em;
         }
 
         .controls {
@@ -88,18 +83,11 @@
             color: #555;
         }
 
-        input[type="date"], select {
+        input[type="date"] {
             padding: 10px 15px;
             border: 2px solid #ddd;
             border-radius: 8px;
             font-size: 14px;
-            transition: all 0.3s;
-        }
-
-        input[type="date"]:focus, select:focus {
-            outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
 
         button {
@@ -119,61 +107,33 @@
             box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
         }
 
-        button:active {
-            transform: translateY(0);
+        /* --- Pannello Valori Fisso --- */
+        #fixed-tooltip {
+            background: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 12px;
+            min-height: 50px;
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
+            font-size: 0.95em;
+            flex-wrap: wrap;
+            gap: 10px;
         }
+
+        .tooltip-val { font-weight: bold; color: #333; margin-left: 5px; }
+        .t-temp { color: #ff6384; }
+        .t-hum { color: #36a2eb; }
+        .t-set { color: #4bc0c0; }
 
         .chart-container {
             position: relative;
             height: 500px;
             margin-bottom: 20px;
         }
-
-        /* --- STILE PER LA LEGENDA FISSA --- */
-        #chart-tooltip {
-            position: absolute;
-            top: 10px;
-            right: 50px; /* Spostato leggermente a sinistra per non coprire assi */
-            background: rgba(255, 255, 255, 0.95);
-            border: 1px solid #ddd;
-            padding: 12px;
-            border-radius: 8px;
-            pointer-events: none; /* Permette click attraverso il box */
-            font-size: 0.9em;
-            color: #333;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            opacity: 0;
-            transition: opacity 0.2s;
-            z-index: 10;
-            min-width: 160px;
-        }
-
-        .tooltip-header {
-            font-weight: bold;
-            margin-bottom: 8px;
-            border-bottom: 1px solid #eee;
-            padding-bottom: 5px;
-            text-align: center;
-            color: #555;
-        }
-
-        .tooltip-row {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 4px;
-            font-family: monospace; /* Allinea meglio i numeri */
-            font-size: 1.1em;
-        }
-
-        .tooltip-color {
-            display: inline-block;
-            width: 10px;
-            height: 10px;
-            margin-right: 8px;
-            border-radius: 50%;
-        }
-        /* --------------------------------- */
 
         .stats {
             display: grid;
@@ -187,111 +147,69 @@
             padding: 20px;
             border-radius: 10px;
             text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
         }
 
         .stat-card h3 {
-            color: #555;
             font-size: 0.9em;
-            margin-bottom: 8px;
+            color: #666;
+            margin-bottom: 10px;
             text-transform: uppercase;
-            letter-spacing: 1px;
         }
 
         .stat-card .value {
-            font-size: 2em;
+            font-size: 1.8em;
             font-weight: bold;
             color: #333;
         }
 
-        .loading {
+        #loading {
             text-align: center;
-            padding: 40px;
-            color: #667eea;
-            font-size: 1.2em;
-        }
-        
-        .simulation-notice {
-            background: #fff3cd;
-            color: #856404;
-            padding: 10px;
-            border-radius: 8px;
-            text-align: center;
-            margin-bottom: 15px;
-            border: 1px solid #ffeeba;
-            font-size: 0.9em;
-        }
-
-        .error {
-            background: #fee;
-            border: 2px solid #f88;
-            color: #c33;
             padding: 20px;
-            border-radius: 8px;
-            text-align: center;
-            margin: 20px 0;
+            color: #667eea;
+            font-weight: bold;
         }
 
-        @media (max-width: 768px) {
-            .container {
-                padding: 20px;
-            }
-
-            h1 {
-                font-size: 1.8em;
-            }
-
-            .chart-container {
-                height: 350px;
-            }
-
-            .controls {
-                flex-direction: column;
-            }
-            
-            #chart-tooltip {
-                position: static; /* Su mobile mettilo sotto o sopra */
-                margin-bottom: 10px;
-                text-align: center;
-                width: 100%;
-                opacity: 1; /* Sempre visibile su mobile se ci sono dati */
-            }
+        #error-message {
+            background: #fee;
+            color: #c33;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+            text-align: center;
+            border: 1px solid #f88;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>📊 Cronotermostato</h1>
-        <p class="subtitle">Storico: Temperature e Umidità</p>
 
         <div class="controls">
             <div class="date-selector">
-                <label for="logDate">Data:</label>
-                <input type="date" id="logDate" value="">
+                <label for="logDate">Seleziona Data:</label>
+                <input type="date" id="logDate">
             </div>
             <button onclick="loadLogData()">Carica Dati</button>
-            <button onclick="resetZoom()">🔍 Reset Zoom</button>
-            <button onclick="goToUpdate()">⚙️ Aggiornamento OTA</button>
-        </div>
-        
-        <div id="simulationNotice" class="simulation-notice" style="display:none;">
-            ⚠️ Modalità Anteprima: Impossibile contattare il dispositivo. Vengono mostrati dati simulati.
+            <button onclick="resetZoom()">Reset Zoom</button>
+            <button onclick="window.location.href='/update'">Update</button>
         </div>
 
-        <div id="loading" class="loading" style="display:none;">
-            Caricamento dati in corso...
+        <div id="error-message"></div>
+        <div id="loading" style="display: none;">Caricamento dati in corso...</div>
+
+        <!-- Pannello Valori Correnti Fisso -->
+        <div id="fixed-tooltip">
+            <div>Ora: <span id="val-time" class="tooltip-val">--:--</span></div>
+            <div>Temp: <span id="val-temp" class="tooltip-val t-temp">--.-</span>°C</div>
+            <div>Umidità: <span id="val-hum" class="tooltip-val t-hum">--</span>%</div>
+            <div>Setpoint: <span id="val-set" class="tooltip-val t-set">--.-</span>°C</div>
         </div>
 
-        <div id="error" class="error" style="display:none;"></div>
-
-        <div class="chart-container" id="chartContainer">
+        <div class="chart-container">
             <canvas id="temperatureChart"></canvas>
-            <!-- DIV per la legenda fissa -->
-            <div id="chart-tooltip"></div>
         </div>
-
-        <p style="text-align: center; color: #888; font-size: 0.9em; margin: 10px 0;">
-            💡 Rotella per zoom | Trascina per zoom area | Shift+Trascina per pan
-        </p>
 
         <div class="stats" id="stats"></div>
     </div>
@@ -299,439 +217,139 @@
     <script>
         let chart = null;
 
-        // Imposta data di oggi
         document.getElementById('logDate').valueAsDate = new Date();
 
-        // Funzione per navigare alla pagina update
-        function goToUpdate() {
-            window.location.href = '/update';
-        }
-
-        // Funzione per resettare lo zoom del grafico
-        function resetZoom() {
-            if (chart) {
-                chart.resetZoom();
-            }
-        }
-
-        // Carica dati automaticamente all'avvio
-        window.addEventListener('load', () => {
-            loadLogData();
-        });
+        function resetZoom() { if (chart) chart.resetZoom(); }
 
         async function loadLogData() {
-            const dateInput = document.getElementById('logDate');
-            const date = dateInput.value.replace(/-/g, ''); // YYYYMMDD
-
-            // Mostra loading
-            document.getElementById('loading').style.display = 'block';
-            document.getElementById('error').style.display = 'none';
-            document.getElementById('simulationNotice').style.display = 'none';
-            document.getElementById('stats').innerHTML = '';
+            const dateInput = document.getElementById('logDate').value;
+            const dateStr = dateInput.replace(/-/g, '');
+            const loading = document.getElementById('loading');
+            const errorDiv = document.getElementById('error-message');
             
-            // Pulisce tooltip precedente
-            document.getElementById('chart-tooltip').style.opacity = 0;
-
-            let arrayBuffer = null;
+            loading.style.display = 'block';
+            errorDiv.style.display = 'none';
 
             try {
-                // Tenta di scaricare i dati reali
-                // Controllo preventivo: se siamo in blob:// (anteprima), fetch fallirebbe sicuramente
-                if (window.location.protocol === 'blob:' || window.location.hostname === '') {
-                    throw new Error("Ambiente di anteprima rilevato");
-                }
-
-                const response = await fetch(`/api/log/raw?date=${date}`);
-                if (!response.ok) {
-                    throw new Error(`Errore HTTP: ${response.status}`);
-                }
-                arrayBuffer = await response.arrayBuffer();
-
+                const response = await fetch(`/api/log/raw?date=${dateStr}`);
+                if (!response.ok) throw new Error(`Dati non trovati per la data selezionata`);
+                const arrayBuffer = await response.arrayBuffer();
+                const parsedData = parseBinaryLog(arrayBuffer);
+                if (parsedData.length === 0) throw new Error("Il file log non contiene dati validi.");
+                renderChart(parsedData);
+                updateStats(parsedData);
             } catch (error) {
-                console.warn('Fetch fallito (normale in anteprima), uso dati simulati:', error);
-                // In caso di errore (es. siamo in anteprima), generiamo dati finti
-                arrayBuffer = generateMockLog(date);
-                document.getElementById('simulationNotice').style.display = 'block';
-            }
-
-            try {
-                // Leggi dati binari (reali o simulati)
-                const data = parseBinaryLog(arrayBuffer);
-
-                // Nascondi loading
-                document.getElementById('loading').style.display = 'none';
-
-                // Processa dati
-                processData(data);
-
-            } catch (error) {
-                console.error('Errore parsing dati:', error);
-                document.getElementById('loading').style.display = 'none';
-                document.getElementById('error').textContent =
-                    'Errore durante il caricamento dei dati: ' + error.message;
-                document.getElementById('error').style.display = 'block';
+                errorDiv.textContent = error.message;
+                errorDiv.style.display = 'block';
+            } finally {
+                loading.style.display = 'none';
             }
         }
 
-        // Genera un ArrayBuffer finto compatibile con il formato TLOG
-        function generateMockLog(dateStr) {
-            const year = parseInt(dateStr.substring(0, 4)) || 2025;
-            const month = parseInt(dateStr.substring(4, 6)) || 1;
-            const day = parseInt(dateStr.substring(6, 8)) || 1;
-            
-            // Genera 1 campione al minuto per 24 ore = 1440 campioni
-            const numSamples = 1440; 
-            const buffer = new ArrayBuffer(12 + numSamples * 10);
+        function parseBinaryLog(buffer) {
             const view = new DataView(buffer);
-            
-            let offset = 0;
-            // Header
-            view.setUint32(offset, 0x474F4C54, true); offset += 4; // Magic "TLOG"
-            view.setUint8(offset, 1); offset += 1; // Version
-            view.setUint16(offset, year, true); offset += 2;
-            view.setUint8(offset, month); offset += 1;
-            view.setUint8(offset, day); offset += 1;
-            view.setUint16(offset, numSamples, true); offset += 2;
-            view.setUint8(offset, 0); offset += 1; // Reserved
-            
-            // Data Payload
-            for (let i = 0; i < numSamples; i++) {
-                const minuteOfDay = i;
-                // Simula una curva di temperatura sinusoidale
-                const hour = i / 60;
-                const tempBase = 18 + Math.sin((hour - 6) * Math.PI / 12) * 3; // Min alle 6, Max alle 18
-                const noise = (Math.random() - 0.5) * 0.2;
-                const temp = tempBase + noise;
-                
-                const setpoint = (hour >= 6 && hour <= 22) ? 21.0 : 17.0;
-                const heat = temp < (setpoint - 0.2) ? 1 : 0; // Isteresi semplice
-                
-                view.setUint16(offset, minuteOfDay, true); offset += 2;
-                view.setInt16(offset, Math.round(temp * 100), true); offset += 2;
-                view.setUint8(offset, 50 + Math.random() * 5); offset += 1; // Hum 50-55%
-                view.setUint8(offset, heat); offset += 1; // Flags (bit 0 = heat)
-                view.setInt16(offset, Math.round(setpoint * 100), true); offset += 2;
-                view.setUint8(offset, 1); offset += 1; // Active Bank
-                view.setUint8(offset, 0); offset += 1; // Reserved
-            }
-            
-            return buffer;
-        }
-
-        function parseBinaryLog(arrayBuffer) {
-            const view = new DataView(arrayBuffer);
-            let offset = 0;
-
-            // Leggi header (12 bytes)
-            const magic = view.getUint32(offset, true); offset += 4;
-            const version = view.getUint8(offset); offset += 1;
-            const year = view.getUint16(offset, true); offset += 2;
-            const month = view.getUint8(offset); offset += 1;
-            const day = view.getUint8(offset); offset += 1;
-            const numSamples = view.getUint16(offset, true); offset += 2;
-            const reserved = view.getUint8(offset); offset += 1;
-
-            // Verifica magic number
-            if (magic !== 0x474F4C54) { // "TLOG"
-                throw new Error('File non valido (magic number errato)');
-            }
-
-            console.log(`Log file: ${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}, ${numSamples} samples`);
-
-            // Leggi records (10 bytes ciascuno - formato history_sample_t)
+            const numSamples = view.getUint16(9, true); 
             const data = [];
-            const downsample = 5; // Campiona 1 ogni 5 minuti per ridurre punti
+            let offset = 12;
 
             for (let i = 0; i < numSamples; i++) {
-                const minuteOfDay = view.getUint16(offset, true); offset += 2;
-                const temp = view.getInt16(offset, true); offset += 2;
-                const hum = view.getUint8(offset); offset += 1;
-                const flags = view.getUint8(offset); offset += 1;
-                const setpoint = view.getInt16(offset, true); offset += 2;
-                const activeBank = view.getUint8(offset); offset += 1;
-                const res = view.getUint8(offset); offset += 1;
+                if (offset + 10 > buffer.byteLength) break;
+                const minuteOfDay = view.getUint16(offset, true);
+                const tempRaw = view.getInt16(offset + 2, true);
+                const humRaw = view.getUint8(offset + 4);
+                const flags = view.getUint8(offset + 5);
+                const setpointRaw = view.getInt16(offset + 6, true);
 
-                // Estrai flag caldaia (bit 0)
-                const heat = flags & 0x01;
-
-                // Campiona solo 1 ogni N
-                if (i % downsample === 0) {
-                    const hour = Math.floor(minuteOfDay / 60);
-                    const minute = minuteOfDay % 60;
-
-                    // Converti sentinel values a null per Chart.js
-                    const temp_value = (temp === -32768) ? null : temp / 100.0;
-                    const setpoint_value = (setpoint === -32768) ? null : setpoint / 100.0;
-                    const hum_value = (hum === 255) ? null : hum;
-
+                if (i % 5 === 0) {
+                    const hours = Math.floor(minuteOfDay / 60);
+                    const minutes = minuteOfDay % 60;
                     data.push({
-                        t: `${String(hour).padStart(2,'0')}:${String(minute).padStart(2,'0')}`,
-                        temp: temp_value,
-                        hum: hum_value,
-                        heat: heat,
-                        setpoint: setpoint_value
+                        time: `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`,
+                        temp: tempRaw === -32768 ? null : tempRaw / 100.0,
+                        hum: humRaw === 255 ? null : humRaw,
+                        heater: flags & 0x01,
+                        setpoint: setpointRaw === -32768 ? null : setpointRaw / 100.0
                     });
                 }
+                offset += 10;
             }
-
-            return {
-                date: `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`,
-                samples: numSamples,
-                data: data
-            };
+            return data;
         }
 
-        function processData(data) {
-            const labels = data.data.map(d => d.t);
-            const temperatures = data.data.map(d => d.temp);
-            const humidity = data.data.map(d => d.hum);
-            const heaterStates = data.data.map(d => d.heat);
-            const setpoints = data.data.map(d => d.setpoint);
-
-            // Crea/aggiorna grafico
+        function renderChart(data) {
             const ctx = document.getElementById('temperatureChart').getContext('2d');
-
-            if (chart) {
-                chart.destroy();
-            }
+            if (chart) chart.destroy();
 
             chart = new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Temperatura',
-                        data: temperatures,
-                        borderColor: 'rgb(255, 99, 132)',
-                        backgroundColor: 'rgba(255, 99, 132, 0.1)',
-                        borderWidth: 2,
-                        tension: 0.4,
-                        yAxisID: 'y',
-                        fill: true,
-                        pointRadius: 0,
-                        pointHoverRadius: 4,
-                        pointHitRadius: 10
-                    }, {
-                        label: 'Umidità',
-                        data: humidity,
-                        borderColor: 'rgb(54, 162, 235)',
-                        backgroundColor: 'rgba(54, 162, 235, 0.1)',
-                        borderWidth: 2,
-                        tension: 0.4,
-                        yAxisID: 'y1',
-                        fill: true,
-                        pointRadius: 0,
-                        pointHoverRadius: 4,
-                        pointHitRadius: 10
-                    }, {
-                        label: 'Soglia',
-                        data: setpoints,
-                        borderColor: 'rgb(75, 192, 192)',
-                        backgroundColor: 'rgba(75, 192, 192, 0.1)',
-                        borderWidth: 2,
-                        borderDash: [5, 5],
-                        tension: 0,
-                        yAxisID: 'y',
-                        fill: false,
-                        pointRadius: 0,
-                        pointHoverRadius: 0
-                    }, {
-                        label: 'Caldaia',
-                        data: heaterStates.map(h => h * 30), // Scala per visibilità
-                        borderColor: 'rgb(255, 159, 64)',
-                        backgroundColor: 'rgba(255, 159, 64, 0.3)',
-                        borderWidth: 1,
-                        stepped: 'before',
-                        yAxisID: 'y',
-                        fill: true,
-                        pointRadius: 0,
-                        pointHoverRadius: 0
-                    }]
+                    labels: data.map(d => d.time),
+                    datasets: [
+                        { label: 'Temperatura (°C)', data: data.map(d => d.temp), borderColor: '#ff6384', backgroundColor: 'rgba(255, 99, 132, 0.1)', yAxisID: 'y', tension: 0.3, pointRadius: 0, fill: true },
+                        { label: 'Umidità (%)', data: data.map(d => d.hum), borderColor: '#36a2eb', backgroundColor: 'rgba(54, 162, 235, 0.1)', yAxisID: 'y1', tension: 0.3, pointRadius: 0, fill: true },
+                        { label: 'Setpoint (°C)', data: data.map(d => d.setpoint), borderColor: '#4bc0c0', borderDash: [5, 5], tension: 0, pointRadius: 0, fill: false },
+                        { label: 'Caldaia Attiva', data: data.map(d => d.heater ? 30 : null), backgroundColor: 'rgba(255, 159, 64, 0.2)', borderColor: 'transparent', fill: 'origin', stepped: true, pointRadius: 0 }
+                    ]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    // Interazione migliorata
-                    interaction: {
-                        mode: 'index',
-                        intersect: false,
-                    },
+                    interaction: { mode: 'index', intersect: false },
                     plugins: {
-                        legend: {
-                            display: false
-                        },
-                        title: {
-                            display: true,
-                            text: `Dati del ${data.date}`,
-                            font: { size: 16 }
-                        },
-                        // CONFIGURAZIONE TOOLTIP ESTERNO (LEGENDA FISSA)
                         tooltip: {
-                            enabled: false, // Disabilita tooltip interno
+                            enabled: false,
                             external: function(context) {
-                                const tooltipEl = document.getElementById('chart-tooltip');
-                                const tooltipModel = context.tooltip;
+                                const {tooltip} = context;
+                                if (tooltip.opacity === 0) return;
 
-                                // Nascondi se il mouse esce
-                                if (tooltipModel.opacity === 0) {
-                                    tooltipEl.style.opacity = 0;
-                                    return;
-                                }
+                                const dataIndex = tooltip.dataPoints[0].dataIndex;
+                                const item = data[dataIndex];
 
-                                let innerHtml = '';
-                                
-                                // Intestazione (Orario)
-                                if (tooltipModel.title) {
-                                    innerHtml += `<div class="tooltip-header">Ore ${tooltipModel.title[0]}</div>`;
-                                }
-
-                                // Corpo (Dati)
-                                if (tooltipModel.body) {
-                                    const bodyLines = tooltipModel.body.map(b => b.lines);
-                                    bodyLines.forEach((body, i) => {
-                                        const colors = tooltipModel.labelColors[i];
-                                        const style = `background:${colors.borderColor}`;
-                                        const span = `<span class="tooltip-color" style="${style}"></span>`;
-                                        
-                                        // Pulisci etichetta (rimuovi Label:)
-                                        const text = body[0].split(':'); 
-                                        const label = text[0];
-                                        const value = text[1] || '';
-
-                                        innerHtml += `
-                                            <div class="tooltip-row">
-                                                <div style="display:flex; align-items:center">
-                                                    ${span} ${label}
-                                                </div>
-                                                <span style="font-weight:bold">${value}</span>
-                                            </div>`;
-                                    });
-                                }
-
-                                tooltipEl.innerHTML = innerHtml;
-                                tooltipEl.style.opacity = 1;
+                                document.getElementById('val-time').textContent = item.time;
+                                document.getElementById('val-temp').textContent = item.temp !== null ? item.temp.toFixed(1) : '--.-';
+                                document.getElementById('val-hum').textContent = item.hum !== null ? item.hum : '--';
+                                document.getElementById('val-set').textContent = item.setpoint !== null ? item.setpoint.toFixed(1) : '--.-';
                             }
                         },
                         zoom: {
                             zoom: {
-                                wheel: {
-                                    enabled: true,
-                                    speed: 0.1
-                                },
-                                drag: {
-                                    enabled: true,
-                                    backgroundColor: 'rgba(127,127,127,0.3)',
-                                    borderColor: 'rgb(127,127,127)',
-                                    borderWidth: 1
-                                },
-                                pinch: {
-                                    enabled: true
-                                },
+                                wheel: { enabled: true },
+                                pinch: { enabled: true },
                                 mode: 'x'
                             },
-                            // CONFIGURAZIONE PAN
                             pan: {
                                 enabled: true,
-                                mode: 'x',
-                                modifierKey: 'shift', // Richiede tasto Shift per il Pan
-                            },
-                            limits: {
-                                x: {min: 'original', max: 'original'},
-                                y: {min: 'original', max: 'original'},
-                                y1: {min: 'original', max: 'original'}
+                                mode: 'x'
                             }
                         }
                     },
                     scales: {
-                        x: {
-                            ticks: {
-                                maxTicksLimit: 24,
-                                autoSkip: true
-                            }
-                        },
-                        y: {
-                            type: 'linear',
-                            display: true,
-                            position: 'left',
-                            title: {
-                                display: true,
-                                text: 'Temperatura (°C)'
-                            },
-                            min: 10,
-                            max: 30
-                        },
-                        y1: {
-                            type: 'linear',
-                            display: true,
-                            position: 'right',
-                            title: {
-                                display: true,
-                                text: 'Umidità (%)'
-                            },
-                            min: 0,
-                            max: 100,
-                            grid: {
-                                drawOnChartArea: false,
-                            }
-                        }
+                        y: { position: 'left', min: 10, max: 32, title: { display: true, text: 'Temp (°C)' } },
+                        y1: { position: 'right', min: 0, max: 100, grid: { drawOnChartArea: false }, title: { display: true, text: 'Umidità (%)' } }
                     }
                 }
             });
-
-            // Calcola statistiche
-            updateStats(temperatures, humidity, heaterStates);
-
-            // Previeni scroll della pagina quando si usa la rotella sul grafico
-            const chartContainer = document.getElementById('chartContainer');
-            chartContainer.addEventListener('wheel', function(e) {
-                e.preventDefault();
-            }, { passive: false });
-
-            // Disabilita menu contestuale sul grafico (per permettere tasto destro)
-            chartContainer.addEventListener('contextmenu', function(e) {
-                e.preventDefault();
-            });
         }
 
-        function updateStats(temps, humidity, heater) {
-            const validTemps = temps.filter(t => t !== null);
-            const validHum = humidity.filter(h => h !== null);
+        function updateStats(data) {
+            const temps = data.map(d => d.temp).filter(t => t !== null);
+            const humidity = data.map(d => d.hum).filter(h => h !== null);
+            const heater = data.map(d => d.heater);
+            if (temps.length === 0) return;
 
-            if (validTemps.length === 0) return;
+            const avgTemp = (temps.reduce((a, b) => a + b, 0) / temps.length).toFixed(1);
+            const minTemp = Math.min(...temps).toFixed(1);
+            const maxTemp = Math.max(...temps).toFixed(1);
+            const avgHum = (humidity.reduce((a, b) => a + b, 0) / humidity.length).toFixed(0);
 
-            const avgTemp = (validTemps.reduce((a, b) => a + b, 0) / validTemps.length).toFixed(1);
-            const minTemp = Math.min(...validTemps).toFixed(1);
-            const maxTemp = Math.max(...validTemps).toFixed(1);
-            const avgHum = (validHum.reduce((a, b) => a + b, 0) / validHum.length).toFixed(0);
-
-            // Calcola tempo caldaia attiva
-            const heaterOnCount = heater.filter(h => h === 1).length;
-            const heaterOnMinutes = heaterOnCount * 5; 
-            const heaterOnHours = Math.floor(heaterOnMinutes / 60);
-            const heaterOnMins = heaterOnMinutes % 60;
-            const heaterTimeStr = `${heaterOnHours}h ${heaterOnMins}m`;
-
-            const statsHTML = `
-                <div class="stat-card">
-                    <h3>Temperatura Media</h3>
-                    <div class="value">${avgTemp}°C</div>
-                </div>
-                <div class="stat-card">
-                    <h3>Temp. Min/Max</h3>
-                    <div class="value">${minTemp}°C / ${maxTemp}°C</div>
-                </div>
-                <div class="stat-card">
-                    <h3>Umidità Media</h3>
-                    <div class="value">${avgHum}%</div>
-                </div>
-                <div class="stat-card">
-                    <h3>Caldaia Attiva</h3>
-                    <div class="value">${heaterTimeStr}</div>
-                </div>
-            `;
-
-            document.getElementById('stats').innerHTML = statsHTML;
+            const hCount = heater.filter(h => h === 1).length * 5;
+            document.getElementById('stats').innerHTML = `
+                <div class="stat-card"><h3>Media Temp.</h3><div class="value">${avgTemp}°C</div></div>
+                <div class="stat-card"><h3>Min/Max Temp.</h3><div class="value">${minTemp}/${maxTemp}°C</div></div>
+                <div class="stat-card"><h3>Media Umid.</h3><div class="value">${avgHum}%</div></div>
+                <div class="stat-card"><h3>Caldaia</h3><div class="value">${Math.floor(hCount/60)}h ${hCount%60}m</div></div>`;
         }
+        window.onload = loadLogData;
     </script>
 </body>
 </html>
