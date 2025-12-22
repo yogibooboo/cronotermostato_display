@@ -152,6 +152,28 @@
         .stat-card h3 { font-size: 0.9em; color: #666; margin-bottom: 10px; text-transform: uppercase; }
         .stat-card .value { font-size: 1.8em; font-weight: bold; color: #333; }
 
+        .commands-help {
+            background: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 8px 12px;
+            margin-top: 10px;
+            margin-bottom: 15px;
+            font-size: 0.85em;
+            text-align: center;
+            color: #666;
+        }
+
+        .commands-help kbd {
+            background: #fff;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            padding: 1px 4px;
+            font-family: monospace;
+            font-size: 0.9em;
+            margin: 0 2px;
+        }
+
         #loading { text-align: center; padding: 20px; color: #667eea; font-weight: bold; }
         #error-message { background: #fee; color: #c33; padding: 15px; border-radius: 8px; display: none; text-align: center; }
     </style>
@@ -185,6 +207,10 @@
             <div class="chart-container">
                 <canvas id="temperatureChart"></canvas>
             </div>
+        </div>
+
+        <div class="commands-help">
+            <kbd>Rotella</kbd> zoom X • <kbd>Trascina</kbd> zoom area • <kbd>Destro+Trascina</kbd> pan • <kbd>Reset Zoom</kbd> ripristina
         </div>
 
         <div class="stats" id="stats"></div>
@@ -323,6 +349,45 @@
                 const zoomFactor = delta > 0 ? 0.9 : 1.1;
                 chart.zoom({ x: zoomFactor, focalPoint: { x: e.offsetX } });
             }, { passive: false });
+
+            // Pan custom con tasto destro del mouse
+            let isPanning = false;
+            let panStartX = 0;
+
+            canvas.addEventListener('contextmenu', function(e) {
+                e.preventDefault();
+            });
+
+            canvas.addEventListener('mousedown', function(e) {
+                if (e.button === 2) {  // Tasto destro
+                    isPanning = true;
+                    panStartX = e.offsetX;
+                    canvas.style.cursor = 'grab';
+                }
+            });
+
+            canvas.addEventListener('mousemove', function(e) {
+                if (isPanning) {
+                    const deltaX = e.offsetX - panStartX;
+                    const panAmount = deltaX / canvas.width;
+                    chart.pan({ x: panAmount * 1000 }, undefined, 'default');  // Aumentato da 100 a 1000 per velocità
+                    panStartX = e.offsetX;
+                }
+            });
+
+            canvas.addEventListener('mouseup', function(e) {
+                if (e.button === 2) {
+                    isPanning = false;
+                    canvas.style.cursor = 'default';
+                }
+            });
+
+            canvas.addEventListener('mouseleave', function() {
+                if (isPanning) {
+                    isPanning = false;
+                    canvas.style.cursor = 'default';
+                }
+            });
         }
 
         function updateStats(data) {
