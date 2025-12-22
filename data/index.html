@@ -17,6 +17,19 @@
             };
             document.head.appendChild(script);
         })();
+
+        // Carica plugin zoom per Chart.js con fallback: CDN → locale
+        (function() {
+            const script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js';
+            script.onerror = function() {
+                console.log('CDN zoom plugin non disponibile, carico versione locale');
+                const localScript = document.createElement('script');
+                localScript.src = '/chartjs-plugin-zoom.min.js';
+                document.head.appendChild(localScript);
+            };
+            document.head.appendChild(script);
+        })();
     </script>
     <style>
         * {
@@ -116,6 +129,52 @@
             margin-bottom: 20px;
         }
 
+        /* --- STILE PER LA LEGENDA FISSA --- */
+        #chart-tooltip {
+            position: absolute;
+            top: 10px;
+            right: 50px; /* Spostato leggermente a sinistra per non coprire assi */
+            background: rgba(255, 255, 255, 0.95);
+            border: 1px solid #ddd;
+            padding: 12px;
+            border-radius: 8px;
+            pointer-events: none; /* Permette click attraverso il box */
+            font-size: 0.9em;
+            color: #333;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            opacity: 0;
+            transition: opacity 0.2s;
+            z-index: 10;
+            min-width: 160px;
+        }
+
+        .tooltip-header {
+            font-weight: bold;
+            margin-bottom: 8px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 5px;
+            text-align: center;
+            color: #555;
+        }
+
+        .tooltip-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 4px;
+            font-family: monospace; /* Allinea meglio i numeri */
+            font-size: 1.1em;
+        }
+
+        .tooltip-color {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            margin-right: 8px;
+            border-radius: 50%;
+        }
+        /* --------------------------------- */
+
         .stats {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -150,6 +209,17 @@
             color: #667eea;
             font-size: 1.2em;
         }
+        
+        .simulation-notice {
+            background: #fff3cd;
+            color: #856404;
+            padding: 10px;
+            border-radius: 8px;
+            text-align: center;
+            margin-bottom: 15px;
+            border: 1px solid #ffeeba;
+            font-size: 0.9em;
+        }
 
         .error {
             background: #fee;
@@ -177,6 +247,14 @@
             .controls {
                 flex-direction: column;
             }
+            
+            #chart-tooltip {
+                position: static; /* Su mobile mettilo sotto o sopra */
+                margin-bottom: 10px;
+                text-align: center;
+                width: 100%;
+                opacity: 1; /* Sempre visibile su mobile se ci sono dati */
+            }
         }
     </style>
 </head>
@@ -191,7 +269,12 @@
                 <input type="date" id="logDate" value="">
             </div>
             <button onclick="loadLogData()">Carica Dati</button>
+            <button onclick="resetZoom()">🔍 Reset Zoom</button>
             <button onclick="goToUpdate()">⚙️ Aggiornamento OTA</button>
+        </div>
+        
+        <div id="simulationNotice" class="simulation-notice" style="display:none;">
+            ⚠️ Modalità Anteprima: Impossibile contattare il dispositivo. Vengono mostrati dati simulati.
         </div>
 
         <div id="loading" class="loading" style="display:none;">
@@ -200,9 +283,15 @@
 
         <div id="error" class="error" style="display:none;"></div>
 
-        <div class="chart-container">
+        <div class="chart-container" id="chartContainer">
             <canvas id="temperatureChart"></canvas>
+            <!-- DIV per la legenda fissa -->
+            <div id="chart-tooltip"></div>
         </div>
+
+        <p style="text-align: center; color: #888; font-size: 0.9em; margin: 10px 0;">
+            💡 Rotella per zoom | Trascina per zoom area | Shift+Trascina per pan
+        </p>
 
         <div class="stats" id="stats"></div>
     </div>
@@ -218,6 +307,13 @@
             window.location.href = '/update';
         }
 
+        // Funzione per resettare lo zoom del grafico
+        function resetZoom() {
+            if (chart) {
+                chart.resetZoom();
+            }
+        }
+
         // Carica dati automaticamente all'avvio
         window.addEventListener('load', () => {
             loadLogData();
@@ -230,18 +326,36 @@
             // Mostra loading
             document.getElementById('loading').style.display = 'block';
             document.getElementById('error').style.display = 'none';
+            document.getElementById('simulationNotice').style.display = 'none';
             document.getElementById('stats').innerHTML = '';
+            
+            // Pulisce tooltip precedente
+            document.getElementById('chart-tooltip').style.opacity = 0;
+
+            let arrayBuffer = null;
 
             try {
-                // Usa endpoint binario per efficienza
-                const response = await fetch(`/api/log/raw?date=${date}`);
+                // Tenta di scaricare i dati reali
+                // Controllo preventivo: se siamo in blob:// (anteprima), fetch fallirebbe sicuramente
+                if (window.location.protocol === 'blob:' || window.location.hostname === '') {
+                    throw new Error("Ambiente di anteprima rilevato");
+                }
 
+                const response = await fetch(`/api/log/raw?date=${date}`);
                 if (!response.ok) {
                     throw new Error(`Errore HTTP: ${response.status}`);
                 }
+                arrayBuffer = await response.arrayBuffer();
 
-                // Leggi dati binari
-                const arrayBuffer = await response.arrayBuffer();
+            } catch (error) {
+                console.warn('Fetch fallito (normale in anteprima), uso dati simulati:', error);
+                // In caso di errore (es. siamo in anteprima), generiamo dati finti
+                arrayBuffer = generateMockLog(date);
+                document.getElementById('simulationNotice').style.display = 'block';
+            }
+
+            try {
+                // Leggi dati binari (reali o simulati)
                 const data = parseBinaryLog(arrayBuffer);
 
                 // Nascondi loading
@@ -251,12 +365,57 @@
                 processData(data);
 
             } catch (error) {
-                console.error('Errore caricamento dati:', error);
+                console.error('Errore parsing dati:', error);
                 document.getElementById('loading').style.display = 'none';
                 document.getElementById('error').textContent =
                     'Errore durante il caricamento dei dati: ' + error.message;
                 document.getElementById('error').style.display = 'block';
             }
+        }
+
+        // Genera un ArrayBuffer finto compatibile con il formato TLOG
+        function generateMockLog(dateStr) {
+            const year = parseInt(dateStr.substring(0, 4)) || 2025;
+            const month = parseInt(dateStr.substring(4, 6)) || 1;
+            const day = parseInt(dateStr.substring(6, 8)) || 1;
+            
+            // Genera 1 campione al minuto per 24 ore = 1440 campioni
+            const numSamples = 1440; 
+            const buffer = new ArrayBuffer(12 + numSamples * 10);
+            const view = new DataView(buffer);
+            
+            let offset = 0;
+            // Header
+            view.setUint32(offset, 0x474F4C54, true); offset += 4; // Magic "TLOG"
+            view.setUint8(offset, 1); offset += 1; // Version
+            view.setUint16(offset, year, true); offset += 2;
+            view.setUint8(offset, month); offset += 1;
+            view.setUint8(offset, day); offset += 1;
+            view.setUint16(offset, numSamples, true); offset += 2;
+            view.setUint8(offset, 0); offset += 1; // Reserved
+            
+            // Data Payload
+            for (let i = 0; i < numSamples; i++) {
+                const minuteOfDay = i;
+                // Simula una curva di temperatura sinusoidale
+                const hour = i / 60;
+                const tempBase = 18 + Math.sin((hour - 6) * Math.PI / 12) * 3; // Min alle 6, Max alle 18
+                const noise = (Math.random() - 0.5) * 0.2;
+                const temp = tempBase + noise;
+                
+                const setpoint = (hour >= 6 && hour <= 22) ? 21.0 : 17.0;
+                const heat = temp < (setpoint - 0.2) ? 1 : 0; // Isteresi semplice
+                
+                view.setUint16(offset, minuteOfDay, true); offset += 2;
+                view.setInt16(offset, Math.round(temp * 100), true); offset += 2;
+                view.setUint8(offset, 50 + Math.random() * 5); offset += 1; // Hum 50-55%
+                view.setUint8(offset, heat); offset += 1; // Flags (bit 0 = heat)
+                view.setInt16(offset, Math.round(setpoint * 100), true); offset += 2;
+                view.setUint8(offset, 1); offset += 1; // Active Bank
+                view.setUint8(offset, 0); offset += 1; // Reserved
+            }
+            
+            return buffer;
         }
 
         function parseBinaryLog(arrayBuffer) {
@@ -300,12 +459,17 @@
                     const hour = Math.floor(minuteOfDay / 60);
                     const minute = minuteOfDay % 60;
 
+                    // Converti sentinel values a null per Chart.js
+                    const temp_value = (temp === -32768) ? null : temp / 100.0;
+                    const setpoint_value = (setpoint === -32768) ? null : setpoint / 100.0;
+                    const hum_value = (hum === 255) ? null : hum;
+
                     data.push({
                         t: `${String(hour).padStart(2,'0')}:${String(minute).padStart(2,'0')}`,
-                        temp: temp / 100.0,
-                        hum: hum,
+                        temp: temp_value,
+                        hum: hum_value,
                         heat: heat,
-                        setpoint: setpoint / 100.0
+                        setpoint: setpoint_value
                     });
                 }
             }
@@ -336,7 +500,7 @@
                 data: {
                     labels: labels,
                     datasets: [{
-                        label: 'Temperatura (°C)',
+                        label: 'Temperatura',
                         data: temperatures,
                         borderColor: 'rgb(255, 99, 132)',
                         backgroundColor: 'rgba(255, 99, 132, 0.1)',
@@ -345,9 +509,10 @@
                         yAxisID: 'y',
                         fill: true,
                         pointRadius: 0,
-                        pointHoverRadius: 5
+                        pointHoverRadius: 4,
+                        pointHitRadius: 10
                     }, {
-                        label: 'Umidità (%)',
+                        label: 'Umidità',
                         data: humidity,
                         borderColor: 'rgb(54, 162, 235)',
                         backgroundColor: 'rgba(54, 162, 235, 0.1)',
@@ -356,9 +521,10 @@
                         yAxisID: 'y1',
                         fill: true,
                         pointRadius: 0,
-                        pointHoverRadius: 5
+                        pointHoverRadius: 4,
+                        pointHitRadius: 10
                     }, {
-                        label: 'Soglia (°C)',
+                        label: 'Soglia',
                         data: setpoints,
                         borderColor: 'rgb(75, 192, 192)',
                         backgroundColor: 'rgba(75, 192, 192, 0.1)',
@@ -368,7 +534,7 @@
                         yAxisID: 'y',
                         fill: false,
                         pointRadius: 0,
-                        pointHoverRadius: 5
+                        pointHoverRadius: 0
                     }, {
                         label: 'Caldaia',
                         data: heaterStates.map(h => h * 30), // Scala per visibilità
@@ -379,43 +545,100 @@
                         yAxisID: 'y',
                         fill: true,
                         pointRadius: 0,
-                        pointHoverRadius: 5
+                        pointHoverRadius: 0
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    // Interazione migliorata
                     interaction: {
                         mode: 'index',
                         intersect: false,
                     },
                     plugins: {
                         legend: {
-                            display: true,
-                            position: 'top',
+                            display: false
                         },
                         title: {
                             display: true,
                             text: `Dati del ${data.date}`,
-                            font: {
-                                size: 16
+                            font: { size: 16 }
+                        },
+                        // CONFIGURAZIONE TOOLTIP ESTERNO (LEGENDA FISSA)
+                        tooltip: {
+                            enabled: false, // Disabilita tooltip interno
+                            external: function(context) {
+                                const tooltipEl = document.getElementById('chart-tooltip');
+                                const tooltipModel = context.tooltip;
+
+                                // Nascondi se il mouse esce
+                                if (tooltipModel.opacity === 0) {
+                                    tooltipEl.style.opacity = 0;
+                                    return;
+                                }
+
+                                let innerHtml = '';
+                                
+                                // Intestazione (Orario)
+                                if (tooltipModel.title) {
+                                    innerHtml += `<div class="tooltip-header">Ore ${tooltipModel.title[0]}</div>`;
+                                }
+
+                                // Corpo (Dati)
+                                if (tooltipModel.body) {
+                                    const bodyLines = tooltipModel.body.map(b => b.lines);
+                                    bodyLines.forEach((body, i) => {
+                                        const colors = tooltipModel.labelColors[i];
+                                        const style = `background:${colors.borderColor}`;
+                                        const span = `<span class="tooltip-color" style="${style}"></span>`;
+                                        
+                                        // Pulisci etichetta (rimuovi Label:)
+                                        const text = body[0].split(':'); 
+                                        const label = text[0];
+                                        const value = text[1] || '';
+
+                                        innerHtml += `
+                                            <div class="tooltip-row">
+                                                <div style="display:flex; align-items:center">
+                                                    ${span} ${label}
+                                                </div>
+                                                <span style="font-weight:bold">${value}</span>
+                                            </div>`;
+                                    });
+                                }
+
+                                tooltipEl.innerHTML = innerHtml;
+                                tooltipEl.style.opacity = 1;
                             }
                         },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    let label = context.dataset.label || '';
-                                    if (label) {
-                                        label += ': ';
-                                    }
-                                    if (context.dataset.label === 'Caldaia') {
-                                        label += context.parsed.y > 0 ? 'ON' : 'OFF';
-                                    } else {
-                                        label += context.parsed.y.toFixed(1);
-                                        label += context.dataset.label.includes('Temp') ? ' °C' : ' %';
-                                    }
-                                    return label;
-                                }
+                        zoom: {
+                            zoom: {
+                                wheel: {
+                                    enabled: true,
+                                    speed: 0.1
+                                },
+                                drag: {
+                                    enabled: true,
+                                    backgroundColor: 'rgba(127,127,127,0.3)',
+                                    borderColor: 'rgb(127,127,127)',
+                                    borderWidth: 1
+                                },
+                                pinch: {
+                                    enabled: true
+                                },
+                                mode: 'x'
+                            },
+                            // CONFIGURAZIONE PAN
+                            pan: {
+                                enabled: true,
+                                mode: 'x',
+                                modifierKey: 'shift', // Richiede tasto Shift per il Pan
+                            },
+                            limits: {
+                                x: {min: 'original', max: 'original'},
+                                y: {min: 'original', max: 'original'},
+                                y1: {min: 'original', max: 'original'}
                             }
                         }
                     },
@@ -457,14 +680,36 @@
 
             // Calcola statistiche
             updateStats(temperatures, humidity, heaterStates);
+
+            // Previeni scroll della pagina quando si usa la rotella sul grafico
+            const chartContainer = document.getElementById('chartContainer');
+            chartContainer.addEventListener('wheel', function(e) {
+                e.preventDefault();
+            }, { passive: false });
+
+            // Disabilita menu contestuale sul grafico (per permettere tasto destro)
+            chartContainer.addEventListener('contextmenu', function(e) {
+                e.preventDefault();
+            });
         }
 
         function updateStats(temps, humidity, heater) {
-            const avgTemp = (temps.reduce((a, b) => a + b, 0) / temps.length).toFixed(1);
-            const minTemp = Math.min(...temps).toFixed(1);
-            const maxTemp = Math.max(...temps).toFixed(1);
-            const avgHum = (humidity.reduce((a, b) => a + b, 0) / humidity.length).toFixed(0);
-            const heaterOnTime = ((heater.filter(h => h === 1).length / heater.length) * 100).toFixed(0);
+            const validTemps = temps.filter(t => t !== null);
+            const validHum = humidity.filter(h => h !== null);
+
+            if (validTemps.length === 0) return;
+
+            const avgTemp = (validTemps.reduce((a, b) => a + b, 0) / validTemps.length).toFixed(1);
+            const minTemp = Math.min(...validTemps).toFixed(1);
+            const maxTemp = Math.max(...validTemps).toFixed(1);
+            const avgHum = (validHum.reduce((a, b) => a + b, 0) / validHum.length).toFixed(0);
+
+            // Calcola tempo caldaia attiva
+            const heaterOnCount = heater.filter(h => h === 1).length;
+            const heaterOnMinutes = heaterOnCount * 5; 
+            const heaterOnHours = Math.floor(heaterOnMinutes / 60);
+            const heaterOnMins = heaterOnMinutes % 60;
+            const heaterTimeStr = `${heaterOnHours}h ${heaterOnMins}m`;
 
             const statsHTML = `
                 <div class="stat-card">
@@ -481,7 +726,7 @@
                 </div>
                 <div class="stat-card">
                     <h3>Caldaia Attiva</h3>
-                    <div class="value">${heaterOnTime}%</div>
+                    <div class="value">${heaterTimeStr}</div>
                 </div>
             `;
 

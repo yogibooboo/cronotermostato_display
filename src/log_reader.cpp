@@ -110,17 +110,34 @@ esp_err_t log_data_handler(httpd_req_t *req)
             int hour = minute_of_day / 60;
             int minute = minute_of_day % 60;
 
-            // Converti temperatura e setpoint da centesimi a float
-            float temp_f = temp / 100.0f;
-            float setpoint_f = setpoint / 100.0f;
-
             // Estrai stato caldaia (bit 0 dei flags)
             uint8_t heat = flags & 0x01;
 
+            // Gestisci sentinel values per dati mancanti
+            char temp_str[16], setpoint_str[16], hum_str[8];
+
+            if (temp == -32768) {
+                strcpy(temp_str, "null");
+            } else {
+                snprintf(temp_str, sizeof(temp_str), "%.2f", temp / 100.0f);
+            }
+
+            if (setpoint == -32768) {
+                strcpy(setpoint_str, "null");
+            } else {
+                snprintf(setpoint_str, sizeof(setpoint_str), "%.2f", setpoint / 100.0f);
+            }
+
+            if (hum == 255) {
+                strcpy(hum_str, "null");
+            } else {
+                snprintf(hum_str, sizeof(hum_str), "%d", hum);
+            }
+
             snprintf(json_buf, sizeof(json_buf),
-                     "%s{\"t\":\"%02d:%02d\",\"temp\":%.2f,\"hum\":%d,\"heat\":%d,\"setpoint\":%.2f}",
+                     "%s{\"t\":\"%02d:%02d\",\"temp\":%s,\"hum\":%s,\"heat\":%d,\"setpoint\":%s}",
                      first_record ? "" : ",",
-                     hour, minute, temp_f, hum, heat, setpoint_f);
+                     hour, minute, temp_str, hum_str, heat, setpoint_str);
 
             httpd_resp_sendstr_chunk(req, json_buf);
             first_record = false;
