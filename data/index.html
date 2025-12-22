@@ -287,9 +287,20 @@
                         },
                         zoom: {
                             zoom: {
-                                wheel: { enabled: true },
-                                pinch: { enabled: true },
-                                mode: 'x'
+                                wheel: {
+                                    enabled: false  // Disabilitato, usiamo handler custom
+                                },
+                                drag: {
+                                    enabled: true,
+                                    mode: 'xy',  // Drag su entrambi gli assi
+                                    backgroundColor: 'rgba(127,127,127,0.3)',
+                                    borderColor: 'rgb(127,127,127)',
+                                    borderWidth: 1
+                                },
+                                pinch: {
+                                    enabled: true,
+                                    mode: 'xy'  // Touch pinch su entrambi gli assi
+                                }
                             },
                             pan: {
                                 enabled: true,
@@ -303,6 +314,15 @@
                     }
                 }
             });
+
+            // Handler custom per zoom con rotella solo su asse X
+            const canvas = document.getElementById('temperatureChart');
+            canvas.addEventListener('wheel', function(e) {
+                e.preventDefault();
+                const delta = e.deltaY;
+                const zoomFactor = delta > 0 ? 0.9 : 1.1;
+                chart.zoom({ x: zoomFactor, focalPoint: { x: e.offsetX } });
+            }, { passive: false });
         }
 
         function updateStats(data) {
