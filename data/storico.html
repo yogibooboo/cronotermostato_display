@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cronotermostato - Storico</title>
+    <script>
+        // Carica Chart.js con fallback: CDN → locale
+        (function() {
+            const script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js';
+            script.onerror = function() {
+                const localScript = document.createElement('script');
+                localScript.src = '/chart.min.js';
+                document.head.appendChild(localScript);
+            };
+            document.head.appendChild(script);
+        })();
+
+        // Carica plugin zoom per Chart.js con fallback: CDN → locale
+        (function() {
+            const script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js';
+            script.onerror = function() {
+                const localScript = document.createElement('script');
+                localScript.src = '/chartjs-plugin-zoom.min.js';
+                document.head.appendChild(localScript);
+            };
+            document.head.appendChild(script);
+        })();
+    </script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            padding: 30px;
+        }
+
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 25px;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .date-selector {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        input[type="date"] {
+            padding: 10px 15px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        button {
+            padding: 10px 25px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+        }
+
+        /* Contenitore grafico con legenda sovrapposta */
+        .chart-wrapper {
+            position: relative;
+            height: 500px;
+            margin-bottom: 20px;
+        }
+
+        #fixed-tooltip {
+            position: absolute;
+            top: 10px;
+            left: 60px;
+            z-index: 10;
+            background: rgba(255, 255, 255, 0.85);
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 8px 12px;
+            pointer-events: none; /* Fondamentale per far passare lo zoom al canvas */
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            font-size: 0.85em;
+        }
+
+        .t-row { display: flex; justify-content: space-between; gap: 15px; }
+        .tooltip-label { color: #666; }
+        .tooltip-val { font-weight: bold; color: #333; }
+        .t-temp { color: #ff6384; }
+        .t-hum { color: #36a2eb; }
+        .t-set { color: #4bc0c0; }
+
+        .chart-container {
+            width: 100%;
+            height: 100%;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 25px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+
+        .stat-card h3 { font-size: 0.9em; color: #666; margin-bottom: 10px; text-transform: uppercase; }
+        .stat-card .value { font-size: 1.8em; font-weight: bold; color: #333; }
+
+        .commands-help {
+            text-align: center;
+            font-size: 0.75em;
+            color: #888;
+            margin: 5px 0 10px 0;
+            padding: 0;
+        }
+
+        .commands-help b {
+            color: #555;
+        }
+
+        #loading { text-align: center; padding: 20px; color: #667eea; font-weight: bold; }
+        #error-message { background: #fee; color: #c33; padding: 15px; border-radius: 8px; display: none; text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 Cronotermostato</h1>
+
+        <div class="controls">
+            <div class="date-selector">
+                <label for="logDate">Seleziona Data:</label>
+                <input type="date" id="logDate">
+            </div>
+            <button onclick="loadLogData()">Carica Dati</button>
+            <button onclick="resetZoom()">Reset Zoom</button>
+            <button onclick="window.location.href='/update'">Update</button>
+        </div>
+
+        <div id="error-message"></div>
+        <div id="loading" style="display: none;">Caricamento dati...</div>
+
+        <div class="chart-wrapper">
+            <!-- Pannello Valori Sovrapposto -->
+            <div id="fixed-tooltip">
+                <div class="t-row"><span class="tooltip-label">Ora:</span> <span id="val-time" class="tooltip-val">--:--</span></div>
+                <div class="t-row"><span class="tooltip-label">Temp:</span> <span id="val-temp" class="tooltip-val t-temp">--.-°C</span></div>
+                <div class="t-row"><span class="tooltip-label">Umidità:</span> <span id="val-hum" class="tooltip-val t-hum">--%</span></div>
+                <div class="t-row"><span class="tooltip-label">Setpoint:</span> <span id="val-set" class="tooltip-val t-set">--.-°C</span></div>
+            </div>
+            
+            <div class="chart-container">
+                <canvas id="temperatureChart"></canvas>
+            </div>
+        </div>
+
+        <div class="commands-help">
+            <b>Rotella</b>: zoom X  •  <b>Trascina</b>: zoom area  •  <b>Centrale+Trascina</b>: pan
+        </div>
+
+        <div class="stats" id="stats"></div>
+    </div>
+
+    <script>
+        let chart = null;
+
+        document.getElementById('logDate').valueAsDate = new Date();
+
+        function resetZoom() { if (chart) chart.resetZoom(); }
+
+        async function loadLogData() {
+            const dateInput = document.getElementById('logDate').value;
+            const dateStr = dateInput.replace(/-/g, '');
+            const loading = document.getElementById('loading');
+            const errorDiv = document.getElementById('error-message');
+            
+            loading.style.display = 'block';
+            errorDiv.style.display = 'none';
+
+            try {
+                const response = await fetch(`/api/log/raw?date=${dateStr}`);
+                if (!response.ok) throw new Error(`Dati non trovati`);
+                const arrayBuffer = await response.arrayBuffer();
+                const parsedData = parseBinaryLog(arrayBuffer);
+                if (parsedData.length === 0) throw new Error("File log non valido.");
+                renderChart(parsedData);
+                updateStats(parsedData);
+            } catch (error) {
+                errorDiv.textContent = error.message;
+                errorDiv.style.display = 'block';
+            } finally {
+                loading.style.display = 'none';
+            }
+        }
+
+        function parseBinaryLog(buffer) {
+            const view = new DataView(buffer);
+            const numSamples = view.getUint16(9, true); 
+            const data = [];
+            let offset = 12;
+
+            for (let i = 0; i < numSamples; i++) {
+                if (offset + 10 > buffer.byteLength) break;
+                const minuteOfDay = view.getUint16(offset, true);
+                const tempRaw = view.getInt16(offset + 2, true);
+                const humRaw = view.getUint8(offset + 4);
+                const flags = view.getUint8(offset + 5);
+                const setpointRaw = view.getInt16(offset + 6, true);
+
+                if (i % 5 === 0) {
+                    const hours = Math.floor(minuteOfDay / 60);
+                    const minutes = minuteOfDay % 60;
+                    data.push({
+                        time: `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`,
+                        temp: tempRaw === -32768 ? null : tempRaw / 100.0,
+                        hum: humRaw === 255 ? null : humRaw,
+                        heater: flags & 0x01,
+                        setpoint: setpointRaw === -32768 ? null : setpointRaw / 100.0
+                    });
+                }
+                offset += 10;
+            }
+            return data;
+        }
+
+        // Plugin per linea verticale crosshair
+        const crosshairPlugin = {
+            id: 'crosshair',
+            afterDatasetsDraw(chart) {
+                if (chart.tooltip?._active?.length) {
+                    const activePoint = chart.tooltip._active[0];
+                    const ctx = chart.ctx;
+                    const x = activePoint.element.x;
+                    const topY = chart.scales.y.top;
+                    const bottomY = chart.scales.y.bottom;
+
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.moveTo(x, topY);
+                    ctx.lineTo(x, bottomY);
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = 'rgba(0, 0, 0, 0.7)';
+                    ctx.setLineDash([5, 5]);
+                    ctx.stroke();
+                    ctx.restore();
+                }
+            }
+        };
+
+        function renderChart(data) {
+            const ctx = document.getElementById('temperatureChart').getContext('2d');
+            if (chart) chart.destroy();
+
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.map(d => d.time),
+                    datasets: [
+                        { label: 'Temperatura (°C)', data: data.map(d => d.temp), borderColor: '#ff6384', backgroundColor: 'rgba(255, 99, 132, 0.1)', yAxisID: 'y', tension: 0.3, pointRadius: 0, fill: true },
+                        { label: 'Umidità (%)', data: data.map(d => d.hum), borderColor: '#36a2eb', backgroundColor: 'rgba(54, 162, 235, 0.1)', yAxisID: 'y1', tension: 0.3, pointRadius: 0, fill: true },
+                        { label: 'Setpoint (°C)', data: data.map(d => d.setpoint), borderColor: '#4bc0c0', borderDash: [5, 5], tension: 0, pointRadius: 0, fill: false },
+                        { label: 'Caldaia Attiva', data: data.map(d => d.heater ? 30 : null), backgroundColor: 'rgba(255, 159, 64, 0.2)', borderColor: 'transparent', fill: 'origin', stepped: true, pointRadius: 0 }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        tooltip: {
+                            enabled: false,
+                            external: function(context) {
+                                const {tooltip} = context;
+                                if (tooltip.opacity === 0) return;
+                                const index = tooltip.dataPoints[0].dataIndex;
+                                const item = data[index];
+                                document.getElementById('val-time').textContent = item.time;
+                                document.getElementById('val-temp').textContent = (item.temp?.toFixed(1) || '--.-') + '°C';
+                                document.getElementById('val-hum').textContent = (item.hum || '--') + '%';
+                                document.getElementById('val-set').textContent = (item.setpoint?.toFixed(1) || '--.-') + '°C';
+                            }
+                        },
+                        zoom: {
+                            zoom: {
+                                wheel: {
+                                    enabled: false  // Disabilitato, usiamo handler custom
+                                },
+                                drag: {
+                                    enabled: true,
+                                    mode: 'xy',  // Drag su entrambi gli assi
+                                    backgroundColor: 'rgba(127,127,127,0.3)',
+                                    borderColor: 'rgb(127,127,127)',
+                                    borderWidth: 1
+                                },
+                                pinch: {
+                                    enabled: false
+                                }
+                            },
+                            pan: {
+                                enabled: true,
+                                mode: 'xy'  // Pan su entrambi gli assi
+                            }
+                        }
+                    },
+                    scales: {
+                        y: { position: 'left', min: 10, max: 32 },
+                        y1: { position: 'right', min: 0, max: 100, grid: { drawOnChartArea: false } }
+                    }
+                },
+                plugins: [crosshairPlugin]
+            });
+
+            // Handler custom per zoom con rotella solo su asse X
+            const canvas = document.getElementById('temperatureChart');
+            canvas.addEventListener('wheel', function(e) {
+                e.preventDefault();
+                const delta = e.deltaY;
+                const zoomFactor = delta > 0 ? 0.9 : 1.1;
+                chart.zoom({ x: zoomFactor, focalPoint: { x: e.offsetX } });
+            }, { passive: false });
+
+            // Pan custom con pulsante centrale (rotella premuta) - X e Y
+            let isPanning = false;
+            let panStartX = 0;
+            let panStartY = 0;
+
+            canvas.addEventListener('mousedown', function(e) {
+                if (e.button === 1) {  // Pulsante centrale (rotella)
+                    e.preventDefault();
+                    isPanning = true;
+                    panStartX = e.offsetX;
+                    panStartY = e.offsetY;
+                    canvas.style.cursor = 'grab';
+                }
+            });
+
+            canvas.addEventListener('mousemove', function(e) {
+                if (isPanning) {
+                    const deltaX = e.offsetX - panStartX;
+                    const deltaY = e.offsetY - panStartY;
+
+                    const panAmountX = deltaX / canvas.width;
+                    const panAmountY = deltaY / canvas.height;
+
+                    chart.pan({
+                        x: panAmountX * 1000,
+                        y: panAmountY * 1000
+                    }, undefined, 'none');
+
+                    panStartX = e.offsetX;
+                    panStartY = e.offsetY;
+                }
+            });
+
+            canvas.addEventListener('mouseup', function(e) {
+                if (e.button === 1) {  // Pulsante centrale
+                    isPanning = false;
+                    canvas.style.cursor = 'default';
+                }
+            });
+
+            canvas.addEventListener('mouseleave', function() {
+                if (isPanning) {
+                    isPanning = false;
+                    canvas.style.cursor = 'default';
+                }
+            });
+        }
+
+        function updateStats(data) {
+            const temps = data.map(d => d.temp).filter(t => t !== null);
+            const humidity = data.map(d => d.hum).filter(h => h !== null);
+            const heater = data.map(d => d.heater);
+            if (temps.length === 0) return;
+
+            const avgTemp = (temps.reduce((a, b) => a + b, 0) / temps.length).toFixed(1);
+            const minTemp = Math.min(...temps).toFixed(1);
+            const maxTemp = Math.max(...temps).toFixed(1);
+            const avgHum = (humidity.reduce((a, b) => a + b, 0) / humidity.length).toFixed(0);
+
+            const hCount = heater.filter(h => h === 1).length * 5;
+            document.getElementById('stats').innerHTML = `
+                <div class="stat-card"><h3>Media Temp</h3><div class="value">${avgTemp}°C</div></div>
+                <div class="stat-card"><h3>Min/Max</h3><div class="value">${minTemp}/${maxTemp}°C</div></div>
+                <div class="stat-card"><h3>Umidità Media</h3><div class="value">${avgHum}%</div></div>
+                <div class="stat-card"><h3>Caldaia</h3><div class="value">${Math.floor(hCount/60)}h ${hCount%60}m</div></div>`;
+        }
+        window.onload = loadLogData;
+    </script>
+</body>
+</html>

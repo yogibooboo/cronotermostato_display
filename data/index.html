@@ -2,34 +2,13 @@
 <html lang="it">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cronotermostato - Storico</title>
-    <script>
-        // Carica Chart.js con fallback: CDN → locale
-        (function() {
-            const script = document.createElement('script');
-            script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js';
-            script.onerror = function() {
-                const localScript = document.createElement('script');
-                localScript.src = '/chart.min.js';
-                document.head.appendChild(localScript);
-            };
-            document.head.appendChild(script);
-        })();
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Cronotermostato</title>
 
-        // Carica plugin zoom per Chart.js con fallback: CDN → locale
-        (function() {
-            const script = document.createElement('script');
-            script.src = 'https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js';
-            script.onerror = function() {
-                const localScript = document.createElement('script');
-                localScript.src = '/chartjs-plugin-zoom.min.js';
-                document.head.appendChild(localScript);
-            };
-            document.head.appendChild(script);
-        })();
-    </script>
-    
+    <!-- uPlot CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uplot@1.6.30/dist/uPlot.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/uplot@1.6.30/dist/uPlot.iife.min.js"></script>
+
     <style>
         * {
             margin: 0;
@@ -41,49 +20,84 @@
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
-            padding: 20px;
+            padding: 10px;
         }
 
         .container {
-            max-width: 1200px;
+            max-width: 1000px;
             margin: 0 auto;
             background: white;
             border-radius: 15px;
             box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-            padding: 30px;
+            padding: 20px;
         }
 
-        h1 {
+        /* Header con data/ora e misure */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .datetime {
+            font-size: 1.2em;
             color: #333;
-            text-align: center;
-            margin-bottom: 30px;
-            font-size: 2.5em;
         }
 
+        .datetime .date { font-weight: bold; }
+        .datetime .time { font-size: 1.5em; color: #667eea; }
+
+        .current-values {
+            display: flex;
+            gap: 20px;
+        }
+
+        .value-box {
+            text-align: center;
+            padding: 10px 20px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ec 100%);
+        }
+
+        .value-box .label {
+            font-size: 0.8em;
+            color: #666;
+            text-transform: uppercase;
+        }
+
+        .value-box .value {
+            font-size: 1.8em;
+            font-weight: bold;
+        }
+
+        .value-box.temp .value { color: #ff6384; }
+        .value-box.hum .value { color: #36a2eb; }
+
+        /* Grafico */
+        .chart-wrapper {
+            width: 100%;
+            margin: 20px 0;
+            touch-action: none;
+        }
+
+        #chart {
+            width: 100%;
+        }
+
+        /* Controlli */
         .controls {
             display: flex;
-            gap: 15px;
-            margin-bottom: 25px;
-            flex-wrap: wrap;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .date-selector {
-            display: flex;
             gap: 10px;
-            align-items: center;
-        }
-
-        input[type="date"] {
-            padding: 10px 15px;
-            border: 2px solid #ddd;
-            border-radius: 8px;
-            font-size: 14px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 15px;
         }
 
         button {
-            padding: 10px 25px;
+            padding: 10px 20px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             border: none;
@@ -98,315 +112,524 @@
             transform: translateY(-2px);
         }
 
-        /* Contenitore grafico con legenda sovrapposta */
-        .chart-wrapper {
-            position: relative;
-            height: 500px;
-            margin-bottom: 20px;
+        button:active {
+            transform: translateY(0);
         }
-
-        #fixed-tooltip {
-            position: absolute;
-            top: 10px;
-            left: 60px;
-            z-index: 10;
-            background: rgba(255, 255, 255, 0.85);
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            padding: 8px 12px;
-            pointer-events: none; /* Fondamentale per far passare lo zoom al canvas */
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-            font-size: 0.85em;
-        }
-
-        .t-row { display: flex; justify-content: space-between; gap: 15px; }
-        .tooltip-label { color: #666; }
-        .tooltip-val { font-weight: bold; color: #333; }
-        .t-temp { color: #ff6384; }
-        .t-hum { color: #36a2eb; }
-        .t-set { color: #4bc0c0; }
-
-        .chart-container {
-            width: 100%;
-            height: 100%;
-        }
-
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-top: 25px;
-        }
-
-        .stat-card {
-            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-            padding: 20px;
-            border-radius: 10px;
-            text-align: center;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-        }
-
-        .stat-card h3 { font-size: 0.9em; color: #666; margin-bottom: 10px; text-transform: uppercase; }
-        .stat-card .value { font-size: 1.8em; font-weight: bold; color: #333; }
 
         .commands-help {
             text-align: center;
             font-size: 0.75em;
             color: #888;
-            margin: 5px 0 10px 0;
-            padding: 0;
+            margin: 10px 0;
         }
 
-        .commands-help b {
-            color: #555;
+        .commands-help b { color: #555; }
+
+        /* Responsive */
+        @media (max-width: 600px) {
+            .header {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .current-values {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .value-box {
+                flex: 1;
+                max-width: 150px;
+            }
+
+            .datetime .time {
+                font-size: 1.2em;
+            }
         }
 
-        #loading { text-align: center; padding: 20px; color: #667eea; font-weight: bold; }
-        #error-message { background: #fee; color: #c33; padding: 15px; border-radius: 8px; display: none; text-align: center; }
+        #loading {
+            text-align: center;
+            padding: 20px;
+            color: #667eea;
+        }
+
+        #error-message {
+            background: #fee;
+            color: #c33;
+            padding: 15px;
+            border-radius: 8px;
+            display: none;
+            text-align: center;
+            margin: 10px 0;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>📊 Cronotermostato</h1>
-
-        <div class="controls">
-            <div class="date-selector">
-                <label for="logDate">Seleziona Data:</label>
-                <input type="date" id="logDate">
+        <!-- Header -->
+        <div class="header">
+            <div class="datetime">
+                <div class="date" id="currentDate">--/--/----</div>
+                <div class="time" id="currentTime">--:--:--</div>
             </div>
-            <button onclick="loadLogData()">Carica Dati</button>
-            <button onclick="resetZoom()">Reset Zoom</button>
-            <button onclick="window.location.href='/update'">Update</button>
+            <div class="current-values">
+                <div class="value-box temp">
+                    <div class="label">Temperatura</div>
+                    <div class="value" id="currentTemp">--.-°C</div>
+                </div>
+                <div class="value-box hum">
+                    <div class="label">Umidità</div>
+                    <div class="value" id="currentHum">--%</div>
+                </div>
+            </div>
         </div>
 
         <div id="error-message"></div>
-        <div id="loading" style="display: none;">Caricamento dati...</div>
+        <div id="loading">Caricamento dati...</div>
 
+        <!-- Grafico uPlot -->
         <div class="chart-wrapper">
-            <!-- Pannello Valori Sovrapposto -->
-            <div id="fixed-tooltip">
-                <div class="t-row"><span class="tooltip-label">Ora:</span> <span id="val-time" class="tooltip-val">--:--</span></div>
-                <div class="t-row"><span class="tooltip-label">Temp:</span> <span id="val-temp" class="tooltip-val t-temp">--.-°C</span></div>
-                <div class="t-row"><span class="tooltip-label">Umidità:</span> <span id="val-hum" class="tooltip-val t-hum">--%</span></div>
-                <div class="t-row"><span class="tooltip-label">Setpoint:</span> <span id="val-set" class="tooltip-val t-set">--.-°C</span></div>
-            </div>
-            
-            <div class="chart-container">
-                <canvas id="temperatureChart"></canvas>
-            </div>
+            <div id="chart"></div>
         </div>
 
         <div class="commands-help">
-            <b>Rotella</b>: zoom X  •  <b>Trascina</b>: zoom area  •  <b>Centrale+Trascina</b>: pan
+            <b>Desktop</b>: rotella zoom, centrale/destro pan, trascina selezione • <b>Touch</b>: 1 dito pan, pinch orizzontale zoom X, pinch verticale zoom Y
         </div>
 
-        <div class="stats" id="stats"></div>
+        <!-- Controlli -->
+        <div class="controls">
+            <button onclick="resetZoom()">Reset Zoom</button>
+            <button onclick="window.location.href='/storico.html'">Storico</button>
+            <button onclick="window.location.href='/update'">Update</button>
+        </div>
     </div>
 
     <script>
-        let chart = null;
+        let uplot = null;
+        let chartData = null;
 
-        document.getElementById('logDate').valueAsDate = new Date();
+        // Aggiorna data/ora
+        function updateDateTime() {
+            const now = new Date();
+            document.getElementById('currentDate').textContent = now.toLocaleDateString('it-IT', {
+                weekday: 'long',
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric'
+            });
+            document.getElementById('currentTime').textContent = now.toLocaleTimeString('it-IT');
+        }
 
-        function resetZoom() { if (chart) chart.resetZoom(); }
+        setInterval(updateDateTime, 1000);
+        updateDateTime();
 
-        async function loadLogData() {
-            const dateInput = document.getElementById('logDate').value;
-            const dateStr = dateInput.replace(/-/g, '');
+        // Carica dati del giorno corrente
+        async function loadTodayData() {
             const loading = document.getElementById('loading');
             const errorDiv = document.getElementById('error-message');
-            
-            loading.style.display = 'block';
-            errorDiv.style.display = 'none';
 
             try {
+                const dateStr = '20251215';  // Test con file esistente
+
                 const response = await fetch(`/api/log/raw?date=${dateStr}`);
-                if (!response.ok) throw new Error(`Dati non trovati`);
+                if (!response.ok) throw new Error('Dati non trovati');
+
                 const arrayBuffer = await response.arrayBuffer();
                 const parsedData = parseBinaryLog(arrayBuffer);
-                if (parsedData.length === 0) throw new Error("File log non valido.");
+
+                if (parsedData.timestamps.length === 0) throw new Error('File log vuoto');
+
+                chartData = parsedData;
                 renderChart(parsedData);
-                updateStats(parsedData);
+                updateCurrentValues(parsedData);
+                loading.style.display = 'none';
+
             } catch (error) {
+                loading.style.display = 'none';
                 errorDiv.textContent = error.message;
                 errorDiv.style.display = 'block';
-            } finally {
-                loading.style.display = 'none';
             }
         }
 
+        // Parser binario (stesso formato di storico.html)
         function parseBinaryLog(buffer) {
             const view = new DataView(buffer);
-            const numSamples = view.getUint16(9, true); 
-            const data = [];
+            const numSamples = view.getUint16(9, true);
+
+            const timestamps = [];
+            const temps = [];
+            const hums = [];
+            const setpoints = [];
+
             let offset = 12;
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const baseTimestamp = today.getTime() / 1000;
 
             for (let i = 0; i < numSamples; i++) {
                 if (offset + 10 > buffer.byteLength) break;
+
                 const minuteOfDay = view.getUint16(offset, true);
                 const tempRaw = view.getInt16(offset + 2, true);
                 const humRaw = view.getUint8(offset + 4);
-                const flags = view.getUint8(offset + 5);
                 const setpointRaw = view.getInt16(offset + 6, true);
 
+                // Prendi 1 campione ogni 5 per alleggerire
                 if (i % 5 === 0) {
-                    const hours = Math.floor(minuteOfDay / 60);
-                    const minutes = minuteOfDay % 60;
-                    data.push({
-                        time: `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`,
-                        temp: tempRaw === -32768 ? null : tempRaw / 100.0,
-                        hum: humRaw === 255 ? null : humRaw,
-                        heater: flags & 0x01,
-                        setpoint: setpointRaw === -32768 ? null : setpointRaw / 100.0
-                    });
+                    timestamps.push(baseTimestamp + minuteOfDay * 60);
+                    temps.push(tempRaw === -32768 ? null : tempRaw / 100.0);
+                    hums.push(humRaw === 255 ? null : humRaw);
+                    setpoints.push(setpointRaw === -32768 ? null : setpointRaw / 100.0);
                 }
                 offset += 10;
             }
-            return data;
+
+            return { timestamps, temps, hums, setpoints };
         }
 
-        function renderChart(data) {
-            const ctx = document.getElementById('temperatureChart').getContext('2d');
-            if (chart) chart.destroy();
+        // Aggiorna valori correnti (ultimo campione)
+        function updateCurrentValues(data) {
+            const lastIdx = data.temps.length - 1;
+            if (lastIdx >= 0) {
+                const temp = data.temps[lastIdx];
+                const hum = data.hums[lastIdx];
 
-            chart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: data.map(d => d.time),
-                    datasets: [
-                        { label: 'Temperatura (°C)', data: data.map(d => d.temp), borderColor: '#ff6384', backgroundColor: 'rgba(255, 99, 132, 0.1)', yAxisID: 'y', tension: 0.3, pointRadius: 0, fill: true },
-                        { label: 'Umidità (%)', data: data.map(d => d.hum), borderColor: '#36a2eb', backgroundColor: 'rgba(54, 162, 235, 0.1)', yAxisID: 'y1', tension: 0.3, pointRadius: 0, fill: true },
-                        { label: 'Setpoint (°C)', data: data.map(d => d.setpoint), borderColor: '#4bc0c0', borderDash: [5, 5], tension: 0, pointRadius: 0, fill: false },
-                        { label: 'Caldaia Attiva', data: data.map(d => d.heater ? 30 : null), backgroundColor: 'rgba(255, 159, 64, 0.2)', borderColor: 'transparent', fill: 'origin', stepped: true, pointRadius: 0 }
-                    ]
+                document.getElementById('currentTemp').textContent =
+                    temp !== null ? temp.toFixed(1) + '°C' : '--.-°C';
+                document.getElementById('currentHum').textContent =
+                    hum !== null ? hum + '%' : '--%';
+            }
+        }
+
+        // Render grafico con uPlot
+        function renderChart(data) {
+            const container = document.getElementById('chart');
+            container.innerHTML = '';
+
+            const width = container.parentElement.clientWidth;
+            const height = Math.min(400, window.innerHeight * 0.4);
+
+            const opts = {
+                width: width,
+                height: height,
+                title: "Andamento Giornaliero",
+                cursor: {
+                    sync: { key: "sync" },
+                    drag: { x: true, y: true }
                 },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    interaction: { mode: 'index', intersect: false },
-                    plugins: {
-                        tooltip: {
-                            enabled: false,
-                            external: function(context) {
-                                const {tooltip} = context;
-                                if (tooltip.opacity === 0) return;
-                                const index = tooltip.dataPoints[0].dataIndex;
-                                const item = data[index];
-                                document.getElementById('val-time').textContent = item.time;
-                                document.getElementById('val-temp').textContent = (item.temp?.toFixed(1) || '--.-') + '°C';
-                                document.getElementById('val-hum').textContent = (item.hum || '--') + '%';
-                                document.getElementById('val-set').textContent = (item.setpoint?.toFixed(1) || '--.-') + '°C';
-                            }
-                        },
-                        zoom: {
-                            zoom: {
-                                wheel: {
-                                    enabled: false  // Disabilitato, usiamo handler custom
-                                },
-                                drag: {
-                                    enabled: true,
-                                    mode: 'xy',  // Drag su entrambi gli assi
-                                    backgroundColor: 'rgba(127,127,127,0.3)',
-                                    borderColor: 'rgb(127,127,127)',
-                                    borderWidth: 1
-                                },
-                                pinch: {
-                                    enabled: true,
-                                    mode: 'xy'  // Touch pinch su entrambi gli assi
-                                }
-                            },
-                            pan: {
-                                enabled: true,
-                                mode: 'xy'  // Pan su entrambi gli assi
-                            }
-                        }
+                scales: {
+                    x: { time: true },
+                    y: { range: [10, 32] },
+                    y2: { range: [0, 100] }
+                },
+                axes: [
+                    {
+                        stroke: "#666",
+                        grid: { stroke: "#eee" },
+                        values: (u, vals) => vals.map(v => {
+                            const d = new Date(v * 1000);
+                            return d.getHours().toString().padStart(2, '0') + ':' +
+                                   d.getMinutes().toString().padStart(2, '0');
+                        })
                     },
-                    scales: {
-                        y: { position: 'left', min: 10, max: 32 },
-                        y1: { position: 'right', min: 0, max: 100, grid: { drawOnChartArea: false } }
+                    {
+                        scale: 'y',
+                        stroke: "#ff6384",
+                        grid: { stroke: "#eee" },
+                        values: (u, vals) => vals.map(v => v.toFixed(1) + '°C')
+                    },
+                    {
+                        scale: 'y2',
+                        side: 1,
+                        stroke: "#36a2eb",
+                        grid: { show: false },
+                        values: (u, vals) => vals.map(v => v.toFixed(0) + '%')
+                    }
+                ],
+                series: [
+                    {},  // Serie X (timestamps)
+                    {
+                        label: "Temperatura",
+                        stroke: "#ff6384",
+                        width: 2,
+                        scale: 'y',
+                        fill: "rgba(255, 99, 132, 0.1)"
+                    },
+                    {
+                        label: "Umidità",
+                        stroke: "#36a2eb",
+                        width: 2,
+                        scale: 'y2',
+                        fill: "rgba(54, 162, 235, 0.1)"
+                    },
+                    {
+                        label: "Setpoint",
+                        stroke: "#4bc0c0",
+                        width: 2,
+                        scale: 'y',
+                        dash: [5, 5]
+                    }
+                ],
+                plugins: [
+                    interactionPlugin()
+                ]
+            };
+
+            const plotData = [
+                data.timestamps,
+                data.temps,
+                data.hums,
+                data.setpoints
+            ];
+
+            uplot = new uPlot(opts, plotData, container);
+        }
+
+        // Plugin per zoom/pan su touch e desktop
+        function interactionPlugin() {
+            return {
+                hooks: {
+                    init: (u) => {
+                        const plot = u.root.querySelector('.u-over');
+
+                        // === TOUCH: pinch zoom direzionale + pan con 1 dito (X e Y) ===
+                        let initialPinchDistanceX = null;
+                        let initialPinchDistanceY = null;
+                        let initialScaleX = null;
+                        let initialScaleY = null;
+                        let initialScaleY2 = null;
+                        let touchStartX = null;
+                        let touchStartY = null;
+                        let touchStartScaleXMin = null;
+                        let touchStartScaleXMax = null;
+                        let touchStartScaleYMin = null;
+                        let touchStartScaleYMax = null;
+                        let touchStartScaleY2Min = null;
+                        let touchStartScaleY2Max = null;
+
+                        plot.addEventListener('touchstart', (e) => {
+                            if (e.touches.length === 2) {
+                                // Pinch zoom direzionale
+                                e.preventDefault();
+                                initialPinchDistanceX = Math.abs(e.touches[0].clientX - e.touches[1].clientX);
+                                initialPinchDistanceY = Math.abs(e.touches[0].clientY - e.touches[1].clientY);
+                                initialScaleX = u.scales.x.max - u.scales.x.min;
+                                initialScaleY = u.scales.y.max - u.scales.y.min;
+                                initialScaleY2 = u.scales.y2.max - u.scales.y2.min;
+                            } else if (e.touches.length === 1) {
+                                // Pan con 1 dito
+                                touchStartX = e.touches[0].clientX;
+                                touchStartY = e.touches[0].clientY;
+                                touchStartScaleXMin = u.scales.x.min;
+                                touchStartScaleXMax = u.scales.x.max;
+                                touchStartScaleYMin = u.scales.y.min;
+                                touchStartScaleYMax = u.scales.y.max;
+                                touchStartScaleY2Min = u.scales.y2.min;
+                                touchStartScaleY2Max = u.scales.y2.max;
+                            }
+                        }, { passive: false });
+
+                        plot.addEventListener('touchmove', (e) => {
+                            if (e.touches.length === 2 && initialPinchDistanceX !== null) {
+                                // Pinch zoom direzionale
+                                e.preventDefault();
+                                const currentDistanceX = Math.abs(e.touches[0].clientX - e.touches[1].clientX);
+                                const currentDistanceY = Math.abs(e.touches[0].clientY - e.touches[1].clientY);
+
+                                // Zoom X (pinch orizzontale)
+                                if (initialPinchDistanceX > 20) {  // Soglia minima
+                                    const scaleX = initialPinchDistanceX / currentDistanceX;
+                                    const newRangeX = initialScaleX * scaleX;
+                                    const centerX = (u.scales.x.min + u.scales.x.max) / 2;
+                                    u.setScale('x', {
+                                        min: centerX - newRangeX / 2,
+                                        max: centerX + newRangeX / 2
+                                    });
+                                }
+
+                                // Zoom Y (pinch verticale)
+                                if (initialPinchDistanceY > 20) {  // Soglia minima
+                                    const scaleY = initialPinchDistanceY / currentDistanceY;
+                                    const newRangeY = initialScaleY * scaleY;
+                                    const newRangeY2 = initialScaleY2 * scaleY;
+
+                                    const centerY = (u.scales.y.min + u.scales.y.max) / 2;
+                                    u.setScale('y', {
+                                        min: centerY - newRangeY / 2,
+                                        max: centerY + newRangeY / 2
+                                    });
+
+                                    const centerY2 = (u.scales.y2.min + u.scales.y2.max) / 2;
+                                    u.setScale('y2', {
+                                        min: centerY2 - newRangeY2 / 2,
+                                        max: centerY2 + newRangeY2 / 2
+                                    });
+                                }
+                            } else if (e.touches.length === 1 && touchStartX !== null) {
+                                // Pan con 1 dito (X e Y)
+                                e.preventDefault();
+                                const deltaX = e.touches[0].clientX - touchStartX;
+                                const deltaY = e.touches[0].clientY - touchStartY;
+
+                                // Pan X
+                                const pxPerSecX = u.bbox.width / (touchStartScaleXMax - touchStartScaleXMin);
+                                const secDelta = deltaX / pxPerSecX;
+                                u.setScale('x', {
+                                    min: touchStartScaleXMin - secDelta,
+                                    max: touchStartScaleXMax - secDelta
+                                });
+
+                                // Pan Y (temperatura)
+                                const pxPerUnitY = u.bbox.height / (touchStartScaleYMax - touchStartScaleYMin);
+                                const yDelta = deltaY / pxPerUnitY;
+                                u.setScale('y', {
+                                    min: touchStartScaleYMin + yDelta,
+                                    max: touchStartScaleYMax + yDelta
+                                });
+
+                                // Pan Y2 (umidità)
+                                const pxPerUnitY2 = u.bbox.height / (touchStartScaleY2Max - touchStartScaleY2Min);
+                                const y2Delta = deltaY / pxPerUnitY2;
+                                u.setScale('y2', {
+                                    min: touchStartScaleY2Min + y2Delta,
+                                    max: touchStartScaleY2Max + y2Delta
+                                });
+                            }
+                        }, { passive: false });
+
+                        plot.addEventListener('touchend', () => {
+                            initialPinchDistanceX = null;
+                            initialPinchDistanceY = null;
+                            initialScaleX = null;
+                            initialScaleY = null;
+                            initialScaleY2 = null;
+                            touchStartX = null;
+                            touchStartY = null;
+                        });
+
+                        // === DESKTOP: pan con tasto centrale o destro (X e Y) ===
+                        let isPanning = false;
+                        let panStartX = null;
+                        let panStartY = null;
+                        let panScaleXMin = null;
+                        let panScaleXMax = null;
+                        let panScaleYMin = null;
+                        let panScaleYMax = null;
+                        let panScaleY2Min = null;
+                        let panScaleY2Max = null;
+
+                        plot.addEventListener('mousedown', (e) => {
+                            if (e.button === 1 || e.button === 2) {  // Centrale o destro
+                                e.preventDefault();
+                                isPanning = true;
+                                panStartX = e.clientX;
+                                panStartY = e.clientY;
+                                panScaleXMin = u.scales.x.min;
+                                panScaleXMax = u.scales.x.max;
+                                panScaleYMin = u.scales.y.min;
+                                panScaleYMax = u.scales.y.max;
+                                panScaleY2Min = u.scales.y2.min;
+                                panScaleY2Max = u.scales.y2.max;
+                                plot.style.cursor = 'grabbing';
+                            }
+                        });
+
+                        plot.addEventListener('mousemove', (e) => {
+                            if (isPanning && panStartX !== null) {
+                                const deltaX = e.clientX - panStartX;
+                                const deltaY = e.clientY - panStartY;
+
+                                // Pan X
+                                const pxPerSecX = u.bbox.width / (panScaleXMax - panScaleXMin);
+                                const secDelta = deltaX / pxPerSecX;
+                                u.setScale('x', {
+                                    min: panScaleXMin - secDelta,
+                                    max: panScaleXMax - secDelta
+                                });
+
+                                // Pan Y (temperatura)
+                                const pxPerUnitY = u.bbox.height / (panScaleYMax - panScaleYMin);
+                                const yDelta = deltaY / pxPerUnitY;
+                                u.setScale('y', {
+                                    min: panScaleYMin + yDelta,
+                                    max: panScaleYMax + yDelta
+                                });
+
+                                // Pan Y2 (umidità)
+                                const pxPerUnitY2 = u.bbox.height / (panScaleY2Max - panScaleY2Min);
+                                const y2Delta = deltaY / pxPerUnitY2;
+                                u.setScale('y2', {
+                                    min: panScaleY2Min + y2Delta,
+                                    max: panScaleY2Max + y2Delta
+                                });
+                            }
+                        });
+
+                        plot.addEventListener('mouseup', (e) => {
+                            if (e.button === 1 || e.button === 2) {
+                                isPanning = false;
+                                panStartX = null;
+                                panStartY = null;
+                                plot.style.cursor = 'default';
+                            }
+                        });
+
+                        plot.addEventListener('mouseleave', () => {
+                            isPanning = false;
+                            panStartX = null;
+                            panStartY = null;
+                            plot.style.cursor = 'default';
+                        });
+
+                        plot.addEventListener('contextmenu', (e) => {
+                            e.preventDefault();
+                        });
+
+                        // === DESKTOP: zoom con rotella ===
+                        plot.addEventListener('wheel', (e) => {
+                            e.preventDefault();
+                            const rect = plot.getBoundingClientRect();
+                            const cursorX = e.clientX - rect.left;
+                            const cursorRatio = cursorX / rect.width;
+
+                            const scaleMin = u.scales.x.min;
+                            const scaleMax = u.scales.x.max;
+                            const range = scaleMax - scaleMin;
+                            const cursorVal = scaleMin + range * cursorRatio;
+
+                            const zoomFactor = e.deltaY > 0 ? 1.1 : 0.9;
+                            const newRange = range * zoomFactor;
+
+                            const newMin = cursorVal - newRange * cursorRatio;
+                            const newMax = cursorVal + newRange * (1 - cursorRatio);
+
+                            u.setScale('x', { min: newMin, max: newMax });
+                        }, { passive: false });
                     }
                 }
-            });
-
-            // Handler custom per zoom con rotella solo su asse X
-            const canvas = document.getElementById('temperatureChart');
-            canvas.addEventListener('wheel', function(e) {
-                e.preventDefault();
-                const delta = e.deltaY;
-                const zoomFactor = delta > 0 ? 0.9 : 1.1;
-                chart.zoom({ x: zoomFactor, focalPoint: { x: e.offsetX } });
-            }, { passive: false });
-
-            // Pan custom con pulsante centrale (rotella premuta) - X e Y
-            let isPanning = false;
-            let panStartX = 0;
-            let panStartY = 0;
-
-            canvas.addEventListener('mousedown', function(e) {
-                if (e.button === 1) {  // Pulsante centrale (rotella)
-                    e.preventDefault();
-                    isPanning = true;
-                    panStartX = e.offsetX;
-                    panStartY = e.offsetY;
-                    canvas.style.cursor = 'grab';
-                }
-            });
-
-            canvas.addEventListener('mousemove', function(e) {
-                if (isPanning) {
-                    const deltaX = e.offsetX - panStartX;
-                    const deltaY = e.offsetY - panStartY;
-
-                    const panAmountX = deltaX / canvas.width;
-                    const panAmountY = deltaY / canvas.height;
-
-                    chart.pan({
-                        x: panAmountX * 1000,
-                        y: panAmountY * 1000
-                    }, undefined, 'none');
-
-                    panStartX = e.offsetX;
-                    panStartY = e.offsetY;
-                }
-            });
-
-            canvas.addEventListener('mouseup', function(e) {
-                if (e.button === 1) {  // Pulsante centrale
-                    isPanning = false;
-                    canvas.style.cursor = 'default';
-                }
-            });
-
-            canvas.addEventListener('mouseleave', function() {
-                if (isPanning) {
-                    isPanning = false;
-                    canvas.style.cursor = 'default';
-                }
-            });
+            };
         }
 
-        function updateStats(data) {
-            const temps = data.map(d => d.temp).filter(t => t !== null);
-            const humidity = data.map(d => d.hum).filter(h => h !== null);
-            const heater = data.map(d => d.heater);
-            if (temps.length === 0) return;
-
-            const avgTemp = (temps.reduce((a, b) => a + b, 0) / temps.length).toFixed(1);
-            const minTemp = Math.min(...temps).toFixed(1);
-            const maxTemp = Math.max(...temps).toFixed(1);
-            const avgHum = (humidity.reduce((a, b) => a + b, 0) / humidity.length).toFixed(0);
-
-            const hCount = heater.filter(h => h === 1).length * 5;
-            document.getElementById('stats').innerHTML = `
-                <div class="stat-card"><h3>Media Temp</h3><div class="value">${avgTemp}°C</div></div>
-                <div class="stat-card"><h3>Min/Max</h3><div class="value">${minTemp}/${maxTemp}°C</div></div>
-                <div class="stat-card"><h3>Umidità Media</h3><div class="value">${avgHum}%</div></div>
-                <div class="stat-card"><h3>Caldaia</h3><div class="value">${Math.floor(hCount/60)}h ${hCount%60}m</div></div>`;
+        // Reset zoom
+        function resetZoom() {
+            if (uplot && chartData) {
+                const minT = Math.min(...chartData.timestamps);
+                const maxT = Math.max(...chartData.timestamps);
+                uplot.setScale('x', { min: minT, max: maxT });
+                uplot.setScale('y', { min: 10, max: 32 });
+                uplot.setScale('y2', { min: 0, max: 100 });
+            }
         }
-        window.onload = loadLogData;
+
+        // Gestione resize
+        window.addEventListener('resize', () => {
+            if (uplot && chartData) {
+                renderChart(chartData);
+            }
+        });
+
+        // Avvio
+        window.onload = loadTodayData;
     </script>
 </body>
 </html>
