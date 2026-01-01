@@ -5,9 +5,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Cronotermostato</title>
 
-    <!-- uPlot CSS -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uplot@1.6.30/dist/uPlot.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/uplot@1.6.30/dist/uPlot.iife.min.js"></script>
+    <!-- uPlot CSS con fallback locale -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uplot@1.6.30/dist/uPlot.min.css"
+          onerror="this.onerror=null; this.href='/uPlot.min.css';">
+
+    <!-- uPlot JS con fallback locale -->
+    <script>
+        (function() {
+            const script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/uplot@1.6.30/dist/uPlot.iife.min.js';
+            script.onerror = function() {
+                const localScript = document.createElement('script');
+                localScript.src = '/uPlot.min.js';
+                document.head.appendChild(localScript);
+            };
+            document.head.appendChild(script);
+        })();
+    </script>
 
     <style>
         * {
