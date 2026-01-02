@@ -248,6 +248,7 @@ void start_webserver_if_not_running(void) {
     config.lru_purge_enable = true;
     config.recv_wait_timeout = 60;
     config.send_wait_timeout = 60;
+    config.uri_match_fn = httpd_uri_match_wildcard;  // Abilita wildcard matching
 
     ESP_LOGI(TAG, "Starting HTTP server on port %d", config.server_port);
 

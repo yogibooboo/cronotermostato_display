@@ -1,0 +1,11 @@
+{
+    "name": "Cronotermostato",
+    "short_name": "Crono",
+    "icons": [
+        {
+            "src": "/icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        }
+    ]
+}

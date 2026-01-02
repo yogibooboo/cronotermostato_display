@@ -3,7 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#667eea">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/icon-192.png">
+    <link rel="icon" type="image/png" href="/icon-192.png">
     <title>Cronotermostato</title>
+
+    <script>
+        // Toggle fullscreen
+        function toggleFullscreen() {
+            const el = document.documentElement;
+            if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                if (el.requestFullscreen) el.requestFullscreen();
+                else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+            } else {
+                if (document.exitFullscreen) document.exitFullscreen();
+                else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+            }
+        }
+    </script>
 
     <!-- uPlot CSS con fallback locale -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uplot@1.6.30/dist/uPlot.min.css"
@@ -32,18 +52,15 @@
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #f5f5f5;
             min-height: 100vh;
-            padding: 10px;
+            padding: 5px;
         }
 
         .container {
-            max-width: 1000px;
-            margin: 0 auto;
+            width: 100%;
             background: white;
-            border-radius: 15px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-            padding: 20px;
+            padding: 8px;
         }
 
         /* Header con data/ora e misure */
@@ -52,38 +69,37 @@
             justify-content: space-between;
             align-items: center;
             flex-wrap: wrap;
-            gap: 15px;
-            margin-bottom: 20px;
+            gap: 8px;
+            margin-bottom: 5px;
         }
 
         .datetime {
-            font-size: 1.2em;
+            font-size: 1em;
             color: #333;
         }
 
         .datetime .date { font-weight: bold; }
-        .datetime .time { font-size: 1.5em; color: #667eea; }
+        .datetime .time { font-size: 1.2em; color: #667eea; }
 
         .current-values {
             display: flex;
-            gap: 20px;
+            gap: 10px;
         }
 
         .value-box {
             text-align: center;
-            padding: 10px 20px;
-            border-radius: 10px;
-            background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ec 100%);
+            padding: 4px 12px;
+            border-radius: 6px;
+            background: #f0f0f0;
         }
 
         .value-box .label {
-            font-size: 0.8em;
+            font-size: 0.7em;
             color: #666;
-            text-transform: uppercase;
         }
 
         .value-box .value {
-            font-size: 1.8em;
+            font-size: 1.4em;
             font-weight: bold;
         }
 
@@ -93,7 +109,7 @@
         /* Grafico */
         .chart-wrapper {
             width: 100%;
-            margin: 20px 0;
+            margin: 5px 0;
             touch-action: none;
         }
 
@@ -104,40 +120,28 @@
         /* Controlli */
         .controls {
             display: flex;
-            gap: 10px;
+            gap: 8px;
             justify-content: center;
             flex-wrap: wrap;
-            margin-top: 15px;
+            margin-top: 5px;
         }
 
         button {
-            padding: 10px 20px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 6px 12px;
+            background: #667eea;
             color: white;
             border: none;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 600;
+            border-radius: 4px;
+            font-size: 13px;
             cursor: pointer;
-            transition: transform 0.2s;
-        }
-
-        button:hover {
-            transform: translateY(-2px);
-        }
-
-        button:active {
-            transform: translateY(0);
         }
 
         .commands-help {
             text-align: center;
-            font-size: 0.75em;
+            font-size: 0.7em;
             color: #888;
-            margin: 10px 0;
+            margin: 3px 0;
         }
-
-        .commands-help b { color: #555; }
 
         /* Responsive */
         @media (max-width: 600px) {
@@ -207,12 +211,13 @@
         </div>
 
         <div class="commands-help">
-            <b>Desktop</b>: rotella zoom, centrale/destro pan, trascina selezione • <b>Touch</b>: 1 dito pan, pinch orizzontale zoom X, pinch verticale zoom Y
+            <b>Desktop</b>: rotella zoom, centrale/destro pan, trascina selezione • <b>Touch</b>: 1 dito hover, 2 dita pan + pinch zoom
         </div>
 
         <!-- Controlli -->
         <div class="controls">
             <button onclick="resetZoom()">Reset Zoom</button>
+            <button onclick="toggleFullscreen()" id="fsBtn">Fullscreen</button>
             <button onclick="window.location.href='/storico.html'">Storico</button>
             <button onclick="window.location.href='/update'">Update</button>
         </div>
@@ -288,13 +293,10 @@
                 const humRaw = view.getUint8(offset + 4);
                 const setpointRaw = view.getInt16(offset + 6, true);
 
-                // Prendi 1 campione ogni 5 per alleggerire
-                if (i % 5 === 0) {
-                    timestamps.push(baseTimestamp + minuteOfDay * 60);
-                    temps.push(tempRaw === -32768 ? null : tempRaw / 100.0);
-                    hums.push(humRaw === 255 ? null : humRaw);
-                    setpoints.push(setpointRaw === -32768 ? null : setpointRaw / 100.0);
-                }
+                timestamps.push(baseTimestamp + minuteOfDay * 60);
+                temps.push(tempRaw === -32768 ? null : tempRaw / 100.0);
+                hums.push(humRaw === 255 ? null : humRaw);
+                setpoints.push(setpointRaw === -32768 ? null : setpointRaw / 100.0);
                 offset += 10;
             }
 
@@ -321,12 +323,16 @@
             container.innerHTML = '';
 
             const width = container.parentElement.clientWidth;
-            const height = Math.min(400, window.innerHeight * 0.4);
+            // Calcola altezza disponibile: viewport - header - controlli - margini
+            const header = document.querySelector('.header');
+            const controls = document.querySelector('.controls');
+            const help = document.querySelector('.commands-help');
+            const usedHeight = header.offsetHeight + controls.offsetHeight + help.offsetHeight + 50;
+            const height = window.innerHeight - usedHeight;
 
             const opts = {
                 width: width,
                 height: height,
-                title: "Andamento Giornaliero",
                 cursor: {
                     sync: { key: "sync" },
                     drag: { x: true, y: true }
@@ -406,108 +412,109 @@
                     init: (u) => {
                         const plot = u.root.querySelector('.u-over');
 
-                        // === TOUCH: pinch zoom direzionale + pan con 1 dito (X e Y) ===
+                        // === TOUCH: 1 dito = hover, 2 dita = pinch zoom + pan ===
                         let initialPinchDistanceX = null;
                         let initialPinchDistanceY = null;
                         let initialScaleX = null;
                         let initialScaleY = null;
                         let initialScaleY2 = null;
-                        let touchStartX = null;
-                        let touchStartY = null;
-                        let touchStartScaleXMin = null;
-                        let touchStartScaleXMax = null;
-                        let touchStartScaleYMin = null;
-                        let touchStartScaleYMax = null;
-                        let touchStartScaleY2Min = null;
-                        let touchStartScaleY2Max = null;
+                        let lastPinchCenterX = null;
+                        let lastPinchCenterY = null;
+                        let panTouchScaleXMin = null;
+                        let panTouchScaleXMax = null;
+                        let panTouchScaleYMin = null;
+                        let panTouchScaleYMax = null;
+                        let panTouchScaleY2Min = null;
+                        let panTouchScaleY2Max = null;
 
                         plot.addEventListener('touchstart', (e) => {
                             if (e.touches.length === 2) {
-                                // Pinch zoom direzionale
                                 e.preventDefault();
+                                // Pinch zoom - salva distanze iniziali
                                 initialPinchDistanceX = Math.abs(e.touches[0].clientX - e.touches[1].clientX);
                                 initialPinchDistanceY = Math.abs(e.touches[0].clientY - e.touches[1].clientY);
                                 initialScaleX = u.scales.x.max - u.scales.x.min;
                                 initialScaleY = u.scales.y.max - u.scales.y.min;
                                 initialScaleY2 = u.scales.y2.max - u.scales.y2.min;
+                                // Pan - salva centro iniziale
+                                lastPinchCenterX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                                lastPinchCenterY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+                                panTouchScaleXMin = u.scales.x.min;
+                                panTouchScaleXMax = u.scales.x.max;
+                                panTouchScaleYMin = u.scales.y.min;
+                                panTouchScaleYMax = u.scales.y.max;
+                                panTouchScaleY2Min = u.scales.y2.min;
+                                panTouchScaleY2Max = u.scales.y2.max;
                             } else if (e.touches.length === 1) {
-                                // Pan con 1 dito
-                                touchStartX = e.touches[0].clientX;
-                                touchStartY = e.touches[0].clientY;
-                                touchStartScaleXMin = u.scales.x.min;
-                                touchStartScaleXMax = u.scales.x.max;
-                                touchStartScaleYMin = u.scales.y.min;
-                                touchStartScaleYMax = u.scales.y.max;
-                                touchStartScaleY2Min = u.scales.y2.min;
-                                touchStartScaleY2Max = u.scales.y2.max;
+                                // Hover con 1 dito - simula mousemove per cursore uPlot
+                                const touch = e.touches[0];
+                                const mouseEvent = new MouseEvent('mousemove', {
+                                    clientX: touch.clientX,
+                                    clientY: touch.clientY,
+                                    bubbles: true
+                                });
+                                plot.dispatchEvent(mouseEvent);
                             }
                         }, { passive: false });
 
                         plot.addEventListener('touchmove', (e) => {
                             if (e.touches.length === 2 && initialPinchDistanceX !== null) {
-                                // Pinch zoom direzionale
                                 e.preventDefault();
                                 const currentDistanceX = Math.abs(e.touches[0].clientX - e.touches[1].clientX);
                                 const currentDistanceY = Math.abs(e.touches[0].clientY - e.touches[1].clientY);
+                                const currentCenterX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                                const currentCenterY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
 
-                                // Zoom X (pinch orizzontale)
-                                if (initialPinchDistanceX > 20) {  // Soglia minima
-                                    const scaleX = initialPinchDistanceX / currentDistanceX;
-                                    const newRangeX = initialScaleX * scaleX;
-                                    const centerX = (u.scales.x.min + u.scales.x.max) / 2;
-                                    u.setScale('x', {
-                                        min: centerX - newRangeX / 2,
-                                        max: centerX + newRangeX / 2
-                                    });
-                                }
+                                // Calcola pan (spostamento del centro)
+                                const panDeltaX = currentCenterX - lastPinchCenterX;
+                                const panDeltaY = currentCenterY - lastPinchCenterY;
 
-                                // Zoom Y (pinch verticale)
-                                if (initialPinchDistanceY > 20) {  // Soglia minima
-                                    const scaleY = initialPinchDistanceY / currentDistanceY;
-                                    const newRangeY = initialScaleY * scaleY;
-                                    const newRangeY2 = initialScaleY2 * scaleY;
+                                // Calcola fattori zoom
+                                const zoomFactorX = (initialPinchDistanceX > 20) ? initialPinchDistanceX / currentDistanceX : 1;
+                                const zoomFactorY = (initialPinchDistanceY > 20) ? initialPinchDistanceY / currentDistanceY : 1;
 
-                                    const centerY = (u.scales.y.min + u.scales.y.max) / 2;
-                                    u.setScale('y', {
-                                        min: centerY - newRangeY / 2,
-                                        max: centerY + newRangeY / 2
-                                    });
-
-                                    const centerY2 = (u.scales.y2.min + u.scales.y2.max) / 2;
-                                    u.setScale('y2', {
-                                        min: centerY2 - newRangeY2 / 2,
-                                        max: centerY2 + newRangeY2 / 2
-                                    });
-                                }
-                            } else if (e.touches.length === 1 && touchStartX !== null) {
-                                // Pan con 1 dito (X e Y)
-                                e.preventDefault();
-                                const deltaX = e.touches[0].clientX - touchStartX;
-                                const deltaY = e.touches[0].clientY - touchStartY;
-
-                                // Pan X
-                                const pxPerSecX = u.bbox.width / (touchStartScaleXMax - touchStartScaleXMin);
-                                const secDelta = deltaX / pxPerSecX;
+                                // Applica zoom + pan combinati su X
+                                const newRangeX = initialScaleX * zoomFactorX;
+                                const initialCenterX = (panTouchScaleXMin + panTouchScaleXMax) / 2;
+                                const pxPerSecX = u.bbox.width / initialScaleX;
+                                const panOffsetX = panDeltaX / pxPerSecX;
+                                const newCenterX = initialCenterX - panOffsetX;
                                 u.setScale('x', {
-                                    min: touchStartScaleXMin - secDelta,
-                                    max: touchStartScaleXMax - secDelta
+                                    min: newCenterX - newRangeX / 2,
+                                    max: newCenterX + newRangeX / 2
                                 });
 
-                                // Pan Y (temperatura)
-                                const pxPerUnitY = u.bbox.height / (touchStartScaleYMax - touchStartScaleYMin);
-                                const yDelta = deltaY / pxPerUnitY;
+                                // Applica zoom + pan combinati su Y
+                                const newRangeY = initialScaleY * zoomFactorY;
+                                const initialCenterY = (panTouchScaleYMin + panTouchScaleYMax) / 2;
+                                const pxPerUnitY = u.bbox.height / initialScaleY;
+                                const panOffsetY = panDeltaY / pxPerUnitY;
+                                const newCenterY = initialCenterY + panOffsetY;
                                 u.setScale('y', {
-                                    min: touchStartScaleYMin + yDelta,
-                                    max: touchStartScaleYMax + yDelta
+                                    min: newCenterY - newRangeY / 2,
+                                    max: newCenterY + newRangeY / 2
                                 });
 
-                                // Pan Y2 (umidità)
-                                const pxPerUnitY2 = u.bbox.height / (touchStartScaleY2Max - touchStartScaleY2Min);
-                                const y2Delta = deltaY / pxPerUnitY2;
+                                // Applica zoom + pan combinati su Y2
+                                const newRangeY2 = initialScaleY2 * zoomFactorY;
+                                const initialCenterY2 = (panTouchScaleY2Min + panTouchScaleY2Max) / 2;
+                                const pxPerUnitY2 = u.bbox.height / initialScaleY2;
+                                const panOffsetY2 = panDeltaY / pxPerUnitY2;
+                                const newCenterY2 = initialCenterY2 + panOffsetY2;
                                 u.setScale('y2', {
-                                    min: touchStartScaleY2Min + y2Delta,
-                                    max: touchStartScaleY2Max + y2Delta
+                                    min: newCenterY2 - newRangeY2 / 2,
+                                    max: newCenterY2 + newRangeY2 / 2
                                 });
+
+                            } else if (e.touches.length === 1) {
+                                // Hover con 1 dito
+                                const touch = e.touches[0];
+                                const mouseEvent = new MouseEvent('mousemove', {
+                                    clientX: touch.clientX,
+                                    clientY: touch.clientY,
+                                    bubbles: true
+                                });
+                                plot.dispatchEvent(mouseEvent);
                             }
                         }, { passive: false });
 
@@ -517,8 +524,8 @@
                             initialScaleX = null;
                             initialScaleY = null;
                             initialScaleY2 = null;
-                            touchStartX = null;
-                            touchStartY = null;
+                            lastPinchCenterX = null;
+                            lastPinchCenterY = null;
                         });
 
                         // === DESKTOP: pan con tasto centrale o destro (X e Y) ===
