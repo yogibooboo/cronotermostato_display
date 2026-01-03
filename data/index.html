@@ -108,6 +108,7 @@
 
         /* Grafico */
         .chart-wrapper {
+            position: relative;
             width: 100%;
             margin: 5px 0;
             touch-action: none;
@@ -115,6 +116,37 @@
 
         #chart {
             width: 100%;
+        }
+
+        /* Legenda overlay (visibile solo su desktop e landscape) */
+        #fixed-legend {
+            position: absolute;
+            top: 8px;
+            left: 50px;
+            z-index: 10;
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 6px 10px;
+            pointer-events: none;
+            font-size: 0.8em;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .leg-row { display: flex; justify-content: space-between; gap: 12px; }
+        .leg-label { color: #666; }
+        .leg-val { font-weight: bold; }
+        .leg-temp { color: #ff6384; }
+        .leg-hum { color: #36a2eb; }
+        .leg-set { color: #4bc0c0; }
+
+        /* Nascondi legenda uPlot di default su desktop/landscape */
+        .u-legend { display: none; }
+
+        /* Portrait su mobile: mostra legenda uPlot standard, nascondi overlay */
+        @media (max-width: 600px) and (orientation: portrait) {
+            #fixed-legend { display: none; }
+            .u-legend { display: block; }
         }
 
         /* Controlli */
@@ -207,6 +239,12 @@
 
         <!-- Grafico uPlot -->
         <div class="chart-wrapper">
+            <div id="fixed-legend">
+                <div class="leg-row"><span class="leg-label">Ora:</span> <span id="leg-time" class="leg-val">--:--</span></div>
+                <div class="leg-row"><span class="leg-label">Temp:</span> <span id="leg-temp" class="leg-val leg-temp">--.-°C</span></div>
+                <div class="leg-row"><span class="leg-label">Umidità:</span> <span id="leg-hum" class="leg-val leg-hum">--%</span></div>
+                <div class="leg-row"><span class="leg-label">Setpoint:</span> <span id="leg-set" class="leg-val leg-set">--.-°C</span></div>
+            </div>
             <div id="chart"></div>
         </div>
 
@@ -409,6 +447,25 @@
         function interactionPlugin() {
             return {
                 hooks: {
+                    setCursor: (u) => {
+                        // Aggiorna legenda fissa
+                        const idx = u.cursor.idx;
+                        if (idx !== null && idx !== undefined) {
+                            const ts = u.data[0][idx];
+                            const temp = u.data[1][idx];
+                            const hum = u.data[2][idx];
+                            const setp = u.data[3][idx];
+
+                            const d = new Date(ts * 1000);
+                            const timeStr = d.getHours().toString().padStart(2, '0') + ':' +
+                                           d.getMinutes().toString().padStart(2, '0');
+
+                            document.getElementById('leg-time').textContent = timeStr;
+                            document.getElementById('leg-temp').textContent = temp !== null ? temp.toFixed(1) + '°C' : '--.-°C';
+                            document.getElementById('leg-hum').textContent = hum !== null ? hum + '%' : '--%';
+                            document.getElementById('leg-set').textContent = setp !== null ? setp.toFixed(1) + '°C' : '--.-°C';
+                        }
+                    },
                     init: (u) => {
                         const plot = u.root.querySelector('.u-over');
 
