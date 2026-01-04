@@ -344,21 +344,24 @@
             const tempMap = new Map(logData.timestamps.map((t, i) => [t, logData.temps[i]]));
             const humMap = new Map(logData.timestamps.map((t, i) => [t, logData.hums[i]]));
             const pressMap = new Map(logData.timestamps.map((t, i) => [t, logData.pressures[i]]));
+            const heaterMap = new Map(logData.timestamps.map((t, i) => [t, logData.heaters[i]]));
 
             // Costruisci array finali
             const temps = [];
             const hums = [];
             const setpoints = [];
             const pressures = [];
+            const heaters = [];
 
             for (const t of allTimestamps) {
                 temps.push(tempMap.has(t) ? tempMap.get(t) : null);
                 hums.push(humMap.has(t) ? humMap.get(t) : null);
                 setpoints.push(getSetpointForTime(t));  // Calcola setpoint per ogni timestamp
                 pressures.push(pressMap.has(t) ? pressMap.get(t) : null);
+                heaters.push(heaterMap.has(t) ? heaterMap.get(t) : null);
             }
 
-            return { timestamps: allTimestamps, temps, hums, setpoints, pressures };
+            return { timestamps: allTimestamps, temps, hums, setpoints, pressures, heaters };
         }
 
         // Polling status real-time (ogni secondo)
@@ -438,6 +441,8 @@
                     const y2Max = uplot.scales.y2.max;
                     const y3Min = uplot.scales.y3.min;
                     const y3Max = uplot.scales.y3.max;
+                    const y4Min = uplot.scales.y4 ? uplot.scales.y4.min : 0;
+                    const y4Max = uplot.scales.y4 ? uplot.scales.y4.max : 1;
 
                     // Prepara dati (con programma se oggi)
                     let plotData;
@@ -449,6 +454,7 @@
                         const todayData = buildTodayData(parsedData, dayStart);
                         plotData = [
                             todayData.timestamps,
+                            todayData.heaters,      // Caldaia prima (disegnata sotto)
                             todayData.temps,
                             todayData.hums,
                             todayData.setpoints,
@@ -457,6 +463,7 @@
                     } else {
                         plotData = [
                             parsedData.timestamps,
+                            parsedData.heaters,     // Caldaia prima (disegnata sotto)
                             parsedData.temps,
                             parsedData.hums,
                             parsedData.setpoints,
@@ -472,6 +479,7 @@
                     uplot.setScale('y', { min: yMin, max: yMax });
                     uplot.setScale('y2', { min: y2Min, max: y2Max });
                     uplot.setScale('y3', { min: y3Min, max: y3Max });
+                    uplot.setScale('y4', { min: y4Min, max: y4Max });
                 } else {
                     renderChart(parsedData);
                 }
@@ -524,6 +532,7 @@
             const hums = [];
             const setpoints = [];
             const pressures = [];
+            const heaters = [];
 
             let offset = 12;
             const today = new Date();
@@ -536,6 +545,7 @@
                 const minuteOfDay = view.getUint16(offset, true);
                 const tempRaw = view.getInt16(offset + 2, true);
                 const humRaw = view.getUint8(offset + 4);
+                const flags = view.getUint8(offset + 5);
                 const setpointRaw = view.getInt16(offset + 6, true);
                 const pressRaw = view.getUint16(offset + 10, true);
 
@@ -544,10 +554,11 @@
                 hums.push(humRaw === 255 ? null : humRaw);
                 setpoints.push(setpointRaw === -32768 ? null : setpointRaw / 100.0);
                 pressures.push(pressRaw === 0 ? null : pressRaw);
+                heaters.push((flags & 0x01) ? 1 : 0);  // Bit 0 = relay_on
                 offset += 12;
             }
 
-            return { timestamps, temps, hums, setpoints, pressures };
+            return { timestamps, temps, hums, setpoints, pressures, heaters };
         }
 
         // Render grafico con uPlot
@@ -584,7 +595,8 @@
                     },
                     y: { range: [10, 32] },
                     y2: { range: [0, 100] },
-                    y3: { range: [980, 1040] }
+                    y3: { range: [980, 1040] },
+                    y4: { range: [0, 1] }  // Scala per caldaia (0=off, 1=on)
                 },
                 axes: [
                     {
@@ -620,18 +632,54 @@
                 series: [
                     {},  // Serie X (timestamps)
                     {
+                        // Caldaia come prima serie (disegnata sotto le altre)
+                        label: "Caldaia",
+                        stroke: "rgba(229, 57, 53, 0.15)",
+                        width: 1,
+                        scale: 'y4',
+                        fill: "rgba(229, 57, 53, 0.15)",
+                        paths: (u, seriesIdx, idx0, idx1) => {
+                            const xdata = u.data[0];
+                            const ydata = u.data[seriesIdx];
+
+                            let path = new Path2D();
+                            let fillPath = new Path2D();
+
+                            for (let i = idx0; i <= idx1; i++) {
+                                if (ydata[i] === null) continue;
+
+                                const x0 = u.valToPos(xdata[i], 'x', true);
+                                const x1 = i < idx1 ? u.valToPos(xdata[i+1], 'x', true) : x0 + 1;
+                                const y0 = u.valToPos(0, 'y4', true);
+                                const y1 = u.valToPos(ydata[i], 'y4', true);
+
+                                if (ydata[i] > 0) {
+                                    fillPath.rect(x0, y1, x1 - x0, y0 - y1);
+                                }
+
+                                path.moveTo(x0, y1);
+                                path.lineTo(x1, y1);
+
+                                if (i < idx1 && ydata[i+1] !== null && ydata[i+1] !== ydata[i]) {
+                                    const yNext = u.valToPos(ydata[i+1], 'y4', true);
+                                    path.lineTo(x1, yNext);
+                                }
+                            }
+
+                            return { stroke: path, fill: fillPath };
+                        }
+                    },
+                    {
                         label: "Temperatura",
                         stroke: "#ff6384",
                         width: 2,
-                        scale: 'y',
-                        fill: "rgba(255, 99, 132, 0.1)"
+                        scale: 'y'
                     },
                     {
                         label: "Umidità",
                         stroke: "#36a2eb",
                         width: 2,
-                        scale: 'y2',
-                        fill: "rgba(54, 162, 235, 0.1)"
+                        scale: 'y2'
                     },
                     {
                         label: "Setpoint",
@@ -658,6 +706,7 @@
                 const todayData = buildTodayData(data, dayStart);
                 plotData = [
                     todayData.timestamps,
+                    todayData.heaters,      // Caldaia prima (disegnata sotto)
                     todayData.temps,
                     todayData.hums,
                     todayData.setpoints,
@@ -667,6 +716,7 @@
                 // Storico: usa setpoint dal log
                 plotData = [
                     data.timestamps,
+                    data.heaters,           // Caldaia prima (disegnata sotto)
                     data.temps,
                     data.hums,
                     data.setpoints,
@@ -683,13 +733,14 @@
                 hooks: {
                     setCursor: (u) => {
                         // Aggiorna legenda fissa
+                        // Ordine dati: 0=timestamps, 1=heaters, 2=temps, 3=hums, 4=setpoints, 5=pressures
                         const idx = u.cursor.idx;
                         if (idx !== null && idx !== undefined) {
                             const ts = u.data[0][idx];
-                            const temp = u.data[1][idx];
-                            const hum = u.data[2][idx];
-                            const setp = u.data[3][idx];
-                            const press = u.data[4] ? u.data[4][idx] : null;
+                            const temp = u.data[2][idx];
+                            const hum = u.data[3][idx];
+                            const setp = u.data[4][idx];
+                            const press = u.data[5] ? u.data[5][idx] : null;
 
                             const d = new Date(ts * 1000);
                             const timeStr = d.getHours().toString().padStart(2, '0') + ':' +

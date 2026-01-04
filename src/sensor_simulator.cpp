@@ -16,8 +16,8 @@ static sensor_sim_state_t s_state = {0};
 #define HUMIDITY_MIN            4000    // 40.00%
 #define HUMIDITY_MAX            6000    // 60.00%
 #define HUMIDITY_CHANGE_PER_SEC 5       // centesimi per secondo (0.05%)
-#define PRESSURE_MIN            98000   // 980.00 hPa
-#define PRESSURE_MAX            102000  // 1020.00 hPa
+#define PRESSURE_MIN            99000   // 980.00 hPa
+#define PRESSURE_MAX            101000  // 1020.00 hPa
 #define PRESSURE_CHANGE_PER_SEC 5       // centesimi per secondo (0.05 hPa)
 
 void sensor_sim_init(float initial_temp, uint8_t initial_humidity,
