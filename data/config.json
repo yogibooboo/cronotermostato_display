@@ -25,6 +25,9 @@
       "hysteresis": 0.5,
       "correction_offset": 0.0
     },
+    "pressure": {
+      "correction_offset": 0
+    },
 
     "modes": {
       "current_mode": "auto",

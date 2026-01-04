@@ -25,6 +25,7 @@ static lv_obj_t *page3_screen = NULL;
 // Status labels (will be updated from thermostat)
 static lv_obj_t *label_temp = NULL;
 static lv_obj_t *label_humidity = NULL;
+static lv_obj_t *label_pressure = NULL;
 static lv_obj_t *label_heater = NULL;
 
 // ============================================================================
@@ -79,13 +80,19 @@ static void create_main_screen(void)
     label_humidity = lv_label_create(main_screen);
     lv_label_set_text(label_humidity, "H: --%");
     lv_obj_set_style_text_font(label_humidity, &lv_font_montserrat_20, 0);
-    lv_obj_align(label_humidity, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_align(label_humidity, LV_ALIGN_CENTER, 0, -10);
+
+    // Pressure label
+    label_pressure = lv_label_create(main_screen);
+    lv_label_set_text(label_pressure, "P: ---- hPa");
+    lv_obj_set_style_text_font(label_pressure, &lv_font_montserrat_20, 0);
+    lv_obj_align(label_pressure, LV_ALIGN_CENTER, 0, 20);
 
     // Heater status label
     label_heater = lv_label_create(main_screen);
     lv_label_set_text(label_heater, "Caldaia: OFF");
     lv_obj_set_style_text_font(label_heater, &lv_font_montserrat_20, 0);
-    lv_obj_align(label_heater, LV_ALIGN_CENTER, 0, 40);
+    lv_obj_align(label_heater, LV_ALIGN_CENTER, 0, 50);
 
     // Button 1
     lv_obj_t * btn1 = lv_btn_create(main_screen);
@@ -267,9 +274,9 @@ esp_err_t display_init(void)
     return ESP_OK;
 }
 
-void display_update_status(float temperature, uint8_t humidity, bool heater_on)
+void display_update_status(float temperature, uint8_t humidity, uint16_t pressure, bool heater_on)
 {
-    if (label_temp == NULL || label_humidity == NULL || label_heater == NULL) {
+    if (label_temp == NULL || label_humidity == NULL || label_pressure == NULL || label_heater == NULL) {
         return; // Display not initialized yet
     }
 
@@ -284,8 +291,12 @@ void display_update_status(float temperature, uint8_t humidity, bool heater_on)
     snprintf(buf, sizeof(buf), "H: %d%%", humidity);
     lv_label_set_text(label_humidity, buf);
 
+    // Update pressure
+    snprintf(buf, sizeof(buf), "P: %d hPa", pressure);
+    lv_label_set_text(label_pressure, buf);
+
     // Update heater status
-    lv_label_set_text(label_heater, heater_on ? "Caldaia: ON" : "Caldaia: ZOFF");
+    lv_label_set_text(label_heater, heater_on ? "Caldaia: ON" : "Caldaia: OFF");
 
     bsp_display_unlock();
 }

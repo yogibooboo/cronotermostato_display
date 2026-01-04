@@ -24,9 +24,10 @@ esp_err_t display_init(void);
  *
  * @param temperature Current temperature in °C
  * @param humidity Current humidity in %
+ * @param pressure Current atmospheric pressure in hPa/mbar
  * @param heater_on Heater state (true = ON, false = OFF)
  */
-void display_update_status(float temperature, uint8_t humidity, bool heater_on);
+void display_update_status(float temperature, uint8_t humidity, uint16_t pressure, bool heater_on);
 
 #ifdef __cplusplus
 }
