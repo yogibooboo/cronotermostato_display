@@ -27,7 +27,7 @@ typedef struct __attribute__((packed)) {
     uint8_t reserved;         // Reserved
 } log_header_t;
 
-// Note: Using history_sample_t from comune.h (10 bytes per record)
+// Note: Using history_sample_t from comune.h (12 bytes per record, includes pressure)
 // This header just defines the log file header structure
 
 /**
@@ -53,6 +53,17 @@ esp_err_t log_data_handler(httpd_req_t *req);
  * @return ESP_OK on success
  */
 esp_err_t log_raw_handler(httpd_req_t *req);
+
+/**
+ * @brief Return current day log from PSRAM buffer
+ *
+ * Serves the live log data being collected today.
+ * Returns binary data in the same format as log files.
+ *
+ * @param req HTTP request
+ * @return ESP_OK on success
+ */
+esp_err_t log_current_handler(httpd_req_t *req);
 
 #ifdef __cplusplus
 }

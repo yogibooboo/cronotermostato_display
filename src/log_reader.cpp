@@ -5,10 +5,13 @@
 
 #include "log_reader.h"
 #include "storage_manager.h"
+#include "history_manager.h"
+#include "comune.h"
 #include <esp_log.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <time.h>
 
 static const char *TAG = "LOG_READER";
 
@@ -83,65 +86,65 @@ esp_err_t log_data_handler(httpd_req_t *req)
              header.year, header.month, header.day, header.num_samples);
     httpd_resp_sendstr_chunk(req, json_buf);
 
-    // Leggi e invia records (formato history_sample_t - 10 bytes)
-    // Per ridurre dimensione, campiona ogni N minuti (es. ogni 5 minuti = 288 punti invece di 1440)
-    const int downsample = 5;  // Invia 1 punto ogni 5 minuti
-
-    // Buffer per record (10 bytes)
-    uint8_t record[10];
+    // Leggi e invia tutti i records (formato history_sample_t - 12 bytes con pressione)
+    uint8_t record[12];
     bool first_record = true;
 
     for (int i = 0; i < header.num_samples; i++) {
-        if (fread(record, 10, 1, f) != 1) {
+        if (fread(record, 12, 1, f) != 1) {
             ESP_LOGW(TAG, "Failed to read record %d", i);
             break;
         }
 
-        // Campiona dati
-        if (i % downsample == 0) {
-            // Parse record (history_sample_t format)
-            uint16_t minute_of_day = record[0] | (record[1] << 8);
-            int16_t temp = (int16_t)(record[2] | (record[3] << 8));
-            uint8_t hum = record[4];
-            uint8_t flags = record[5];
-            int16_t setpoint = (int16_t)(record[6] | (record[7] << 8));
+        // Parse record (history_sample_t format - 12 bytes)
+        uint16_t minute_of_day = record[0] | (record[1] << 8);
+        int16_t temp = (int16_t)(record[2] | (record[3] << 8));
+        uint8_t hum = record[4];
+        uint8_t flags = record[5];
+        int16_t setpoint = (int16_t)(record[6] | (record[7] << 8));
+        uint16_t pressure = record[10] | (record[11] << 8);
 
-            // Calcola ora/minuto
-            int hour = minute_of_day / 60;
-            int minute = minute_of_day % 60;
+        // Calcola ora/minuto
+        int hour = minute_of_day / 60;
+        int minute = minute_of_day % 60;
 
-            // Estrai stato caldaia (bit 0 dei flags)
-            uint8_t heat = flags & 0x01;
+        // Estrai stato caldaia (bit 0 dei flags)
+        uint8_t heat = flags & 0x01;
 
-            // Gestisci sentinel values per dati mancanti
-            char temp_str[16], setpoint_str[16], hum_str[8];
+        // Gestisci sentinel values per dati mancanti
+        char temp_str[16], setpoint_str[16], hum_str[8], press_str[8];
 
-            if (temp == -32768) {
-                strcpy(temp_str, "null");
-            } else {
-                snprintf(temp_str, sizeof(temp_str), "%.2f", temp / 100.0f);
-            }
-
-            if (setpoint == -32768) {
-                strcpy(setpoint_str, "null");
-            } else {
-                snprintf(setpoint_str, sizeof(setpoint_str), "%.2f", setpoint / 100.0f);
-            }
-
-            if (hum == 255) {
-                strcpy(hum_str, "null");
-            } else {
-                snprintf(hum_str, sizeof(hum_str), "%d", hum);
-            }
-
-            snprintf(json_buf, sizeof(json_buf),
-                     "%s{\"t\":\"%02d:%02d\",\"temp\":%s,\"hum\":%s,\"heat\":%d,\"setpoint\":%s}",
-                     first_record ? "" : ",",
-                     hour, minute, temp_str, hum_str, heat, setpoint_str);
-
-            httpd_resp_sendstr_chunk(req, json_buf);
-            first_record = false;
+        if (temp == -32768) {
+            strcpy(temp_str, "null");
+        } else {
+            snprintf(temp_str, sizeof(temp_str), "%.2f", temp / 100.0f);
         }
+
+        if (setpoint == -32768) {
+            strcpy(setpoint_str, "null");
+        } else {
+            snprintf(setpoint_str, sizeof(setpoint_str), "%.2f", setpoint / 100.0f);
+        }
+
+        if (hum == 255) {
+            strcpy(hum_str, "null");
+        } else {
+            snprintf(hum_str, sizeof(hum_str), "%d", hum);
+        }
+
+        if (pressure == 0) {
+            strcpy(press_str, "null");
+        } else {
+            snprintf(press_str, sizeof(press_str), "%d", pressure);
+        }
+
+        snprintf(json_buf, sizeof(json_buf),
+                 "%s{\"t\":\"%02d:%02d\",\"temp\":%s,\"hum\":%s,\"heat\":%d,\"setpoint\":%s,\"press\":%s}",
+                 first_record ? "" : ",",
+                 hour, minute, temp_str, hum_str, heat, setpoint_str, press_str);
+
+        httpd_resp_sendstr_chunk(req, json_buf);
+        first_record = false;
     }
 
     fclose(f);
@@ -222,6 +225,57 @@ esp_err_t log_raw_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+esp_err_t log_current_handler(httpd_req_t *req)
+{
+    ESP_LOGI(TAG, "Serving current day log from PSRAM");
+
+    const history_buffer_t* buffer = history_get_buffer();
+    if (buffer == NULL || !buffer->initialized || buffer->samples == NULL) {
+        ESP_LOGW(TAG, "History buffer not initialized");
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "History not initialized");
+        return ESP_FAIL;
+    }
+
+    // Imposta header HTTP per binario
+    httpd_resp_set_type(req, "application/octet-stream");
+
+    // Costruisci nome file dalla data nel buffer
+    char content_disp[128];
+    snprintf(content_disp, sizeof(content_disp), "inline; filename=\"log_%04d%02d%02d.bin\"",
+             buffer->header.year, buffer->header.month, buffer->header.day);
+    httpd_resp_set_hdr(req, "Content-Disposition", content_disp);
+
+    // Invia header (12 bytes)
+    if (httpd_resp_send_chunk(req, (const char*)&buffer->header, sizeof(history_header_t)) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to send header");
+        return ESP_FAIL;
+    }
+
+    // Invia tutti i sample in chunk (per evitare timeout)
+    const size_t chunk_samples = 100;  // 100 sample × 12 bytes = 1200 bytes per chunk
+    const history_sample_t* samples = buffer->samples;
+
+    for (size_t i = 0; i < HISTORY_SAMPLES_PER_DAY; i += chunk_samples) {
+        size_t remaining = HISTORY_SAMPLES_PER_DAY - i;
+        size_t count = (remaining < chunk_samples) ? remaining : chunk_samples;
+
+        if (httpd_resp_send_chunk(req, (const char*)&samples[i],
+                                  count * sizeof(history_sample_t)) != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to send samples chunk at %d", i);
+            return ESP_FAIL;
+        }
+    }
+
+    // Fine chunked response
+    httpd_resp_send_chunk(req, NULL, 0);
+
+    ESP_LOGI(TAG, "Sent current log: %04d-%02d-%02d (%d valid samples)",
+             buffer->header.year, buffer->header.month, buffer->header.day,
+             buffer->header.num_samples);
+
+    return ESP_OK;
+}
+
 esp_err_t register_log_handlers(httpd_handle_t server)
 {
     if (!server) {
@@ -243,7 +297,7 @@ esp_err_t register_log_handlers(httpd_handle_t server)
         return ret;
     }
 
-    // Registra handler binario
+    // Registra handler binario (file da SPIFFS)
     httpd_uri_t log_raw_uri = {
         .uri = "/api/log/raw",
         .method = HTTP_GET,
@@ -257,6 +311,20 @@ esp_err_t register_log_handlers(httpd_handle_t server)
         return ret;
     }
 
-    ESP_LOGI(TAG, "Log API handlers registered (JSON + Binary)");
+    // Registra handler log corrente (da PSRAM)
+    httpd_uri_t log_current_uri = {
+        .uri = "/api/log/current",
+        .method = HTTP_GET,
+        .handler = log_current_handler,
+        .user_ctx = NULL
+    };
+
+    ret = httpd_register_uri_handler(server, &log_current_uri);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to register /api/log/current handler: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
+    ESP_LOGI(TAG, "Log API handlers registered (JSON + Binary + Current)");
     return ESP_OK;
 }

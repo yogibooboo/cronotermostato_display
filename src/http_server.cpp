@@ -9,6 +9,7 @@
 #include "storage_manager.h"
 #include "ota_handlers.h"
 #include "log_reader.h"
+#include "status_api.h"
 
 #include <string.h>
 #include <stdio.h>
@@ -300,7 +301,10 @@ void start_webserver_if_not_running(void) {
         // 6. Log API handlers (GET)
         register_log_handlers(server);
 
-        // 7. Wildcard handler per file statici (DEVE essere ultimo!)
+        // 7. Status API handler (GET)
+        register_status_handler(server);
+
+        // 8. Wildcard handler per file statici (DEVE essere ultimo!)
         httpd_uri_t file_uri = {
             .uri       = "/*",
             .method    = HTTP_GET,
@@ -309,7 +313,7 @@ void start_webserver_if_not_running(void) {
         };
         httpd_register_uri_handler(server, &file_uri);
 
-        ESP_LOGI(TAG, "Registered handlers: / /ws /update /ota_* /api/upload /api/log /* (wildcard)");
+        ESP_LOGI(TAG, "Registered handlers: / /ws /update /ota_* /api/upload /api/log /api/status /* (wildcard)");
     } else {
         ESP_LOGE(TAG, "Failed to start HTTP server");
     }

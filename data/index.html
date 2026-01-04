@@ -105,6 +105,26 @@
 
         .value-box.temp .value { color: #ff6384; }
         .value-box.hum .value { color: #36a2eb; }
+        .value-box.press .value { color: #9966ff; }
+        .value-box.setpoint .value { color: #000000; }
+
+        .value-box.heater {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .heater-dot {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            margin-top: 2px;
+            transition: background-color 0.3s;
+        }
+
+        .heater-dot.on { background-color: #e53935; }
+        .heater-dot.off { background-color: #333; }
 
         /* Grafico */
         .chart-wrapper {
@@ -138,7 +158,8 @@
         .leg-val { font-weight: bold; }
         .leg-temp { color: #ff6384; }
         .leg-hum { color: #36a2eb; }
-        .leg-set { color: #4bc0c0; }
+        .leg-press { color: #9966ff; }
+        .leg-set { color: #000000; }
 
         /* Nascondi legenda uPlot di default su desktop/landscape */
         .u-legend { display: none; }
@@ -231,6 +252,18 @@
                     <div class="label">Umidità</div>
                     <div class="value" id="currentHum">--%</div>
                 </div>
+                <div class="value-box press">
+                    <div class="label">Pressione</div>
+                    <div class="value" id="currentPress">---- hPa</div>
+                </div>
+                <div class="value-box setpoint">
+                    <div class="label">Setpoint</div>
+                    <div class="value" id="currentSetpoint">--.-°C</div>
+                </div>
+                <div class="value-box heater">
+                    <div class="label">Caldaia</div>
+                    <div class="heater-dot off" id="heaterDot"></div>
+                </div>
             </div>
         </div>
 
@@ -243,6 +276,7 @@
                 <div class="leg-row"><span class="leg-label">Ora:</span> <span id="leg-time" class="leg-val">--:--</span></div>
                 <div class="leg-row"><span class="leg-label">Temp:</span> <span id="leg-temp" class="leg-val leg-temp">--.-°C</span></div>
                 <div class="leg-row"><span class="leg-label">Umidità:</span> <span id="leg-hum" class="leg-val leg-hum">--%</span></div>
+                <div class="leg-row"><span class="leg-label">Pressione:</span> <span id="leg-press" class="leg-val leg-press">---- hPa</span></div>
                 <div class="leg-row"><span class="leg-label">Setpoint:</span> <span id="leg-set" class="leg-val leg-set">--.-°C</span></div>
             </div>
             <div id="chart"></div>
@@ -256,7 +290,6 @@
         <div class="controls">
             <button onclick="resetZoom()">Reset Zoom</button>
             <button onclick="toggleFullscreen()" id="fsBtn">Fullscreen</button>
-            <button onclick="window.location.href='/storico.html'">Storico</button>
             <button onclick="window.location.href='/update'">Update</button>
         </div>
     </div>
@@ -264,42 +297,215 @@
     <script>
         let uplot = null;
         let chartData = null;
+        let lastMinute = -1;  // Per rilevare cambio minuto dal termostato
+        let programSlots = null;  // 48 valori del programma attivo
+        let isViewingToday = true;  // true = oggi (usa programma), false = storico (usa log)
 
-        // Aggiorna data/ora
-        function updateDateTime() {
-            const now = new Date();
-            document.getElementById('currentDate').textContent = now.toLocaleDateString('it-IT', {
-                weekday: 'long',
-                day: 'numeric',
-                month: 'long',
-                year: 'numeric'
-            });
-            document.getElementById('currentTime').textContent = now.toLocaleTimeString('it-IT');
+        const giorniSettimana = ['domenica', 'lunedì', 'martedì', 'mercoledì', 'giovedì', 'venerdì', 'sabato'];
+        const mesi = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno',
+                      'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
+
+        // Carica programma setpoint (48 slot da 30 min)
+        async function loadProgram() {
+            try {
+                const response = await fetch('/api/program');
+                if (!response.ok) return;
+                const data = await response.json();
+                programSlots = data.slots;
+                console.log('Programma caricato:', programSlots.length, 'slot');
+            } catch (error) {
+                console.error('Errore caricamento programma:', error);
+            }
         }
 
-        setInterval(updateDateTime, 1000);
-        updateDateTime();
+        // Combina dati log (1/min) con setpoint programma (curva a gradini 24h)
+        // Il setpoint viene calcolato per ogni timestamp basandosi sullo slot
+        function buildTodayData(logData, dayStart) {
+            // Funzione per ottenere il setpoint in base al timestamp
+            function getSetpointForTime(timestamp) {
+                if (!programSlots) return null;
+                const secondsFromMidnight = timestamp - dayStart;
+                if (secondsFromMidnight < 0 || secondsFromMidnight >= 86400) return null;
+                const slot = Math.floor(secondsFromMidnight / 1800);  // 1800 sec = 30 min
+                return programSlots[slot];
+            }
 
-        // Carica dati del giorno corrente
+            // Genera 96 timestamps per il setpoint (bordi degli slot per effetto gradino)
+            const setpointTimestamps = [];
+            for (let slot = 0; slot < 48; slot++) {
+                setpointTimestamps.push(dayStart + slot * 30 * 60);           // Inizio slot
+                setpointTimestamps.push(dayStart + (slot + 1) * 30 * 60 - 1); // Fine slot
+            }
+
+            // Unisci tutti i timestamps (log + setpoint) e ordina
+            const allTimestamps = [...new Set([...logData.timestamps, ...setpointTimestamps])].sort((a, b) => a - b);
+
+            // Crea mappe per lookup veloce dei dati log
+            const tempMap = new Map(logData.timestamps.map((t, i) => [t, logData.temps[i]]));
+            const humMap = new Map(logData.timestamps.map((t, i) => [t, logData.hums[i]]));
+            const pressMap = new Map(logData.timestamps.map((t, i) => [t, logData.pressures[i]]));
+
+            // Costruisci array finali
+            const temps = [];
+            const hums = [];
+            const setpoints = [];
+            const pressures = [];
+
+            for (const t of allTimestamps) {
+                temps.push(tempMap.has(t) ? tempMap.get(t) : null);
+                hums.push(humMap.has(t) ? humMap.get(t) : null);
+                setpoints.push(getSetpointForTime(t));  // Calcola setpoint per ogni timestamp
+                pressures.push(pressMap.has(t) ? pressMap.get(t) : null);
+            }
+
+            return { timestamps: allTimestamps, temps, hums, setpoints, pressures };
+        }
+
+        // Polling status real-time (ogni secondo)
+        async function pollStatus() {
+            try {
+                const response = await fetch('/api/status');
+                if (!response.ok) return;
+
+                const data = await response.json();
+
+                // Aggiorna data/ora dal termostato
+                if (data.year !== undefined) {
+                    const dateStr = giorniSettimana[data.wday] + ' ' + data.day + ' ' + mesi[data.month - 1] + ' ' + data.year;
+                    const timeStr = String(data.hour).padStart(2, '0') + ':' +
+                                   String(data.min).padStart(2, '0') + ':' +
+                                   String(data.sec).padStart(2, '0');
+                    document.getElementById('currentDate').textContent = dateStr;
+                    document.getElementById('currentTime').textContent = timeStr;
+
+                    // Rileva cambio minuto per aggiornare il grafico
+                    if (lastMinute >= 0 && data.min !== lastMinute) {
+                        console.log('Minuto cambiato:', lastMinute, '->', data.min);
+                        await loadChartData();
+                    }
+                    lastMinute = data.min;
+                }
+
+                // Aggiorna valori header
+                document.getElementById('currentTemp').textContent =
+                    data.temp !== null ? data.temp.toFixed(1) + '°C' : '--.-°C';
+                document.getElementById('currentHum').textContent =
+                    data.hum !== null ? data.hum + '%' : '--%';
+                document.getElementById('currentPress').textContent =
+                    data.press !== null ? data.press + ' hPa' : '---- hPa';
+                document.getElementById('currentSetpoint').textContent =
+                    data.setpoint !== null ? data.setpoint.toFixed(1) + '°C' : '--.-°C';
+
+                // Aggiorna indicatore caldaia (pallino rosso/nero)
+                const heaterDot = document.getElementById('heaterDot');
+                if (data.heat === 1) {
+                    heaterDot.classList.remove('off');
+                    heaterDot.classList.add('on');
+                } else {
+                    heaterDot.classList.remove('on');
+                    heaterDot.classList.add('off');
+                }
+
+            } catch (error) {
+                console.error('Errore polling status:', error);
+            }
+        }
+
+        // Avvia polling status ogni secondo
+        setInterval(pollStatus, 1000);
+
+        // Carica solo dati grafico (da PSRAM live)
+        async function loadChartData() {
+            try {
+                const response = await fetch('/api/log/current');
+                if (!response.ok) return;
+
+                const arrayBuffer = await response.arrayBuffer();
+                const parsedData = parseBinaryLog(arrayBuffer);
+
+                if (parsedData.timestamps.length === 0) return;
+
+                chartData = parsedData;
+
+                // Aggiorna dati nel grafico esistente (senza ricreare)
+                if (uplot) {
+                    // Salva zoom corrente
+                    const xMin = uplot.scales.x.min;
+                    const xMax = uplot.scales.x.max;
+                    const yMin = uplot.scales.y.min;
+                    const yMax = uplot.scales.y.max;
+                    const y2Min = uplot.scales.y2.min;
+                    const y2Max = uplot.scales.y2.max;
+                    const y3Min = uplot.scales.y3.min;
+                    const y3Max = uplot.scales.y3.max;
+
+                    // Prepara dati (con programma se oggi)
+                    let plotData;
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const dayStart = today.getTime() / 1000;
+
+                    if (isViewingToday && programSlots) {
+                        const todayData = buildTodayData(parsedData, dayStart);
+                        plotData = [
+                            todayData.timestamps,
+                            todayData.temps,
+                            todayData.hums,
+                            todayData.setpoints,
+                            todayData.pressures
+                        ];
+                    } else {
+                        plotData = [
+                            parsedData.timestamps,
+                            parsedData.temps,
+                            parsedData.hums,
+                            parsedData.setpoints,
+                            parsedData.pressures
+                        ];
+                    }
+
+                    // Aggiorna dati
+                    uplot.setData(plotData);
+
+                    // Ripristina zoom
+                    uplot.setScale('x', { min: xMin, max: xMax });
+                    uplot.setScale('y', { min: yMin, max: yMax });
+                    uplot.setScale('y2', { min: y2Min, max: y2Max });
+                    uplot.setScale('y3', { min: y3Min, max: y3Max });
+                } else {
+                    renderChart(parsedData);
+                }
+
+            } catch (error) {
+                console.error('Errore caricamento grafico:', error);
+            }
+        }
+
+        // Carica dati iniziali del giorno corrente
         async function loadTodayData() {
             const loading = document.getElementById('loading');
             const errorDiv = document.getElementById('error-message');
 
             try {
-                const dateStr = '20251215';  // Test con file esistente
+                // Carica programma setpoint (48 slot)
+                await loadProgram();
 
-                const response = await fetch(`/api/log/raw?date=${dateStr}`);
+                // Usa endpoint live da PSRAM
+                const response = await fetch('/api/log/current');
                 if (!response.ok) throw new Error('Dati non trovati');
 
                 const arrayBuffer = await response.arrayBuffer();
                 const parsedData = parseBinaryLog(arrayBuffer);
 
-                if (parsedData.timestamps.length === 0) throw new Error('File log vuoto');
+                if (parsedData.timestamps.length === 0) throw new Error('Nessun dato disponibile');
 
                 chartData = parsedData;
+                isViewingToday = true;
                 renderChart(parsedData);
-                updateCurrentValues(parsedData);
                 loading.style.display = 'none';
+
+                // Avvia primo polling status
+                pollStatus();
 
             } catch (error) {
                 loading.style.display = 'none';
@@ -308,7 +514,7 @@
             }
         }
 
-        // Parser binario (stesso formato di storico.html)
+        // Parser binario (formato 12 byte con pressione)
         function parseBinaryLog(buffer) {
             const view = new DataView(buffer);
             const numSamples = view.getUint16(9, true);
@@ -317,6 +523,7 @@
             const temps = [];
             const hums = [];
             const setpoints = [];
+            const pressures = [];
 
             let offset = 12;
             const today = new Date();
@@ -324,35 +531,23 @@
             const baseTimestamp = today.getTime() / 1000;
 
             for (let i = 0; i < numSamples; i++) {
-                if (offset + 10 > buffer.byteLength) break;
+                if (offset + 12 > buffer.byteLength) break;
 
                 const minuteOfDay = view.getUint16(offset, true);
                 const tempRaw = view.getInt16(offset + 2, true);
                 const humRaw = view.getUint8(offset + 4);
                 const setpointRaw = view.getInt16(offset + 6, true);
+                const pressRaw = view.getUint16(offset + 10, true);
 
                 timestamps.push(baseTimestamp + minuteOfDay * 60);
                 temps.push(tempRaw === -32768 ? null : tempRaw / 100.0);
                 hums.push(humRaw === 255 ? null : humRaw);
                 setpoints.push(setpointRaw === -32768 ? null : setpointRaw / 100.0);
-                offset += 10;
+                pressures.push(pressRaw === 0 ? null : pressRaw);
+                offset += 12;
             }
 
-            return { timestamps, temps, hums, setpoints };
-        }
-
-        // Aggiorna valori correnti (ultimo campione)
-        function updateCurrentValues(data) {
-            const lastIdx = data.temps.length - 1;
-            if (lastIdx >= 0) {
-                const temp = data.temps[lastIdx];
-                const hum = data.hums[lastIdx];
-
-                document.getElementById('currentTemp').textContent =
-                    temp !== null ? temp.toFixed(1) + '°C' : '--.-°C';
-                document.getElementById('currentHum').textContent =
-                    hum !== null ? hum + '%' : '--%';
-            }
+            return { timestamps, temps, hums, setpoints, pressures };
         }
 
         // Render grafico con uPlot
@@ -368,6 +563,12 @@
             const usedHeight = header.offsetHeight + controls.offsetHeight + help.offsetHeight + 50;
             const height = window.innerHeight - usedHeight;
 
+            // Calcola timestamp mezzanotte di oggi (inizio e fine giornata)
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const dayStart = today.getTime() / 1000;
+            const dayEnd = dayStart + 24 * 60 * 60;  // +24 ore
+
             const opts = {
                 width: width,
                 height: height,
@@ -376,9 +577,14 @@
                     drag: { x: true, y: true }
                 },
                 scales: {
-                    x: { time: true },
+                    x: {
+                        time: true,
+                        min: dayStart,
+                        max: dayEnd
+                    },
                     y: { range: [10, 32] },
-                    y2: { range: [0, 100] }
+                    y2: { range: [0, 100] },
+                    y3: { range: [980, 1040] }
                 },
                 axes: [
                     {
@@ -402,6 +608,13 @@
                         stroke: "#36a2eb",
                         grid: { show: false },
                         values: (u, vals) => vals.map(v => v.toFixed(0) + '%')
+                    },
+                    {
+                        scale: 'y3',
+                        side: 1,
+                        stroke: "#9966ff",
+                        grid: { show: false },
+                        values: (u, vals) => vals.map(v => v.toFixed(0))
                     }
                 ],
                 series: [
@@ -422,10 +635,15 @@
                     },
                     {
                         label: "Setpoint",
-                        stroke: "#4bc0c0",
+                        stroke: "#000000",
                         width: 2,
-                        scale: 'y',
-                        dash: [5, 5]
+                        scale: 'y'
+                    },
+                    {
+                        label: "Pressione",
+                        stroke: "#9966ff",
+                        width: 2,
+                        scale: 'y3'
                     }
                 ],
                 plugins: [
@@ -433,12 +651,28 @@
                 ]
             };
 
-            const plotData = [
-                data.timestamps,
-                data.temps,
-                data.hums,
-                data.setpoints
-            ];
+            let plotData;
+
+            if (isViewingToday && programSlots) {
+                // Oggi: usa buildTodayData per 96 punti fissi con programma
+                const todayData = buildTodayData(data, dayStart);
+                plotData = [
+                    todayData.timestamps,
+                    todayData.temps,
+                    todayData.hums,
+                    todayData.setpoints,
+                    todayData.pressures
+                ];
+            } else {
+                // Storico: usa setpoint dal log
+                plotData = [
+                    data.timestamps,
+                    data.temps,
+                    data.hums,
+                    data.setpoints,
+                    data.pressures
+                ];
+            }
 
             uplot = new uPlot(opts, plotData, container);
         }
@@ -455,6 +689,7 @@
                             const temp = u.data[1][idx];
                             const hum = u.data[2][idx];
                             const setp = u.data[3][idx];
+                            const press = u.data[4] ? u.data[4][idx] : null;
 
                             const d = new Date(ts * 1000);
                             const timeStr = d.getHours().toString().padStart(2, '0') + ':' +
@@ -463,6 +698,7 @@
                             document.getElementById('leg-time').textContent = timeStr;
                             document.getElementById('leg-temp').textContent = temp !== null ? temp.toFixed(1) + '°C' : '--.-°C';
                             document.getElementById('leg-hum').textContent = hum !== null ? hum + '%' : '--%';
+                            document.getElementById('leg-press').textContent = press !== null ? press + ' hPa' : '---- hPa';
                             document.getElementById('leg-set').textContent = setp !== null ? setp.toFixed(1) + '°C' : '--.-°C';
                         }
                     },
@@ -475,6 +711,7 @@
                         let initialScaleX = null;
                         let initialScaleY = null;
                         let initialScaleY2 = null;
+                        let initialScaleY3 = null;
                         let lastPinchCenterX = null;
                         let lastPinchCenterY = null;
                         let panTouchScaleXMin = null;
@@ -483,6 +720,8 @@
                         let panTouchScaleYMax = null;
                         let panTouchScaleY2Min = null;
                         let panTouchScaleY2Max = null;
+                        let panTouchScaleY3Min = null;
+                        let panTouchScaleY3Max = null;
 
                         plot.addEventListener('touchstart', (e) => {
                             if (e.touches.length === 2) {
@@ -493,6 +732,7 @@
                                 initialScaleX = u.scales.x.max - u.scales.x.min;
                                 initialScaleY = u.scales.y.max - u.scales.y.min;
                                 initialScaleY2 = u.scales.y2.max - u.scales.y2.min;
+                                initialScaleY3 = u.scales.y3.max - u.scales.y3.min;
                                 // Pan - salva centro iniziale
                                 lastPinchCenterX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
                                 lastPinchCenterY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
@@ -502,6 +742,8 @@
                                 panTouchScaleYMax = u.scales.y.max;
                                 panTouchScaleY2Min = u.scales.y2.min;
                                 panTouchScaleY2Max = u.scales.y2.max;
+                                panTouchScaleY3Min = u.scales.y3.min;
+                                panTouchScaleY3Max = u.scales.y3.max;
                             } else if (e.touches.length === 1) {
                                 // Hover con 1 dito - simula mousemove per cursore uPlot
                                 const touch = e.touches[0];
@@ -563,6 +805,17 @@
                                     max: newCenterY2 + newRangeY2 / 2
                                 });
 
+                                // Applica zoom + pan combinati su Y3 (pressione)
+                                const newRangeY3 = initialScaleY3 * zoomFactorY;
+                                const initialCenterY3 = (panTouchScaleY3Min + panTouchScaleY3Max) / 2;
+                                const pxPerUnitY3 = u.bbox.height / initialScaleY3;
+                                const panOffsetY3 = panDeltaY / pxPerUnitY3;
+                                const newCenterY3 = initialCenterY3 + panOffsetY3;
+                                u.setScale('y3', {
+                                    min: newCenterY3 - newRangeY3 / 2,
+                                    max: newCenterY3 + newRangeY3 / 2
+                                });
+
                             } else if (e.touches.length === 1) {
                                 // Hover con 1 dito
                                 const touch = e.touches[0];
@@ -581,6 +834,7 @@
                             initialScaleX = null;
                             initialScaleY = null;
                             initialScaleY2 = null;
+                            initialScaleY3 = null;
                             lastPinchCenterX = null;
                             lastPinchCenterY = null;
                         });
@@ -595,6 +849,8 @@
                         let panScaleYMax = null;
                         let panScaleY2Min = null;
                         let panScaleY2Max = null;
+                        let panScaleY3Min = null;
+                        let panScaleY3Max = null;
 
                         plot.addEventListener('mousedown', (e) => {
                             if (e.button === 1 || e.button === 2) {  // Centrale o destro
@@ -608,6 +864,8 @@
                                 panScaleYMax = u.scales.y.max;
                                 panScaleY2Min = u.scales.y2.min;
                                 panScaleY2Max = u.scales.y2.max;
+                                panScaleY3Min = u.scales.y3.min;
+                                panScaleY3Max = u.scales.y3.max;
                                 plot.style.cursor = 'grabbing';
                             }
                         });
@@ -639,6 +897,14 @@
                                 u.setScale('y2', {
                                     min: panScaleY2Min + y2Delta,
                                     max: panScaleY2Max + y2Delta
+                                });
+
+                                // Pan Y3 (pressione)
+                                const pxPerUnitY3 = u.bbox.height / (panScaleY3Max - panScaleY3Min);
+                                const y3Delta = deltaY / pxPerUnitY3;
+                                u.setScale('y3', {
+                                    min: panScaleY3Min + y3Delta,
+                                    max: panScaleY3Max + y3Delta
                                 });
                             }
                         });
@@ -688,14 +954,18 @@
             };
         }
 
-        // Reset zoom
+        // Reset zoom - mostra sempre 24 ore complete
         function resetZoom() {
-            if (uplot && chartData) {
-                const minT = Math.min(...chartData.timestamps);
-                const maxT = Math.max(...chartData.timestamps);
-                uplot.setScale('x', { min: minT, max: maxT });
+            if (uplot) {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const dayStart = today.getTime() / 1000;
+                const dayEnd = dayStart + 24 * 60 * 60;
+
+                uplot.setScale('x', { min: dayStart, max: dayEnd });
                 uplot.setScale('y', { min: 10, max: 32 });
                 uplot.setScale('y2', { min: 0, max: 100 });
+                uplot.setScale('y3', { min: 980, max: 1040 });
             }
         }
 

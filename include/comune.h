@@ -61,11 +61,11 @@ extern "C" {
 #define DEFAULT_HYSTERESIS      0.3f   // Isteresi default (°C)
 
 // ============================================================================
-// HISTORY SAMPLE - 10 byte
+// HISTORY SAMPLE - 12 byte
 // ============================================================================
 
 /**
- * @brief Sample singolo dello storico temperatura/umidità
+ * @brief Sample singolo dello storico temperatura/umidità/pressione
  *
  * Ogni file giornaliero contiene 1440 di questi record (1 per minuto).
  * La data è implicita nel nome file (YYYY-MM-DD.bin).
@@ -82,6 +82,7 @@ typedef struct {
     int16_t setpoint;          // Soglia attiva × 100 (°C)
     uint8_t active_bank;       // Banco programma attivo (0-3)
     uint8_t reserved;          // Riservato per allineamento/futuro
+    uint16_t pressure;         // Pressione atmosferica in hPa/mbar (es. 1013)
 } __attribute__((packed)) history_sample_t;
 
 // Flag bits per history_sample_t.flags
@@ -143,6 +144,7 @@ typedef struct {
 typedef struct {
     float current_temperature;     // Lettura corrente sensore (con correzione applicata)
     uint8_t current_humidity;      // Umidità corrente
+    uint16_t current_pressure;     // Pressione atmosferica corrente (hPa/mbar)
     bool relay_state;              // Stato attuale relè
     uint8_t active_bank;           // Banco programma correntemente attivo
     float active_setpoint;         // Soglia correntemente attiva

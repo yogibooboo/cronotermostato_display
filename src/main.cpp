@@ -19,6 +19,8 @@
 #include "wifi.h"
 #include "storage_manager.h"
 #include "time_sync.h"
+#include "history_manager.h"
+#include "sensor_simulator.h"
 #include "esp_wifi.h"
 #include "display_manager.h"
 
@@ -28,39 +30,42 @@ static const char *TAG = "MAIN";
 // Global state
 // ============================================================================
 
-static thermostat_config_t g_config;
-static thermostat_state_t g_state;
+thermostat_config_t g_config;   // Non-static per accesso da status_api.cpp
+thermostat_state_t g_state;     // Non-static per accesso da status_api.cpp
 
 // ============================================================================
 // Tasks
 // ============================================================================
 
 /**
- * @brief Task principale del termostato
+ * @brief Calcola il setpoint corrente dal programma 0 (Standard)
  *
- * Legge sensore, calcola soglia, controlla relè
+ * Usa slot da 30 minuti (48 slot/giorno).
+ * I valori sono in decimi di grado (es. 210 = 21.0°C).
  */
-static void thermostat_task(void *pvParameters)
+static float get_current_setpoint(void)
 {
-    ESP_LOGI(TAG, "Thermostat task started on core %d", xPortGetCoreID());
+    time_t now;
+    struct tm timeinfo;
+    time(&now);
+    localtime_r(&now, &timeinfo);
 
-    TickType_t last_wake_time = xTaskGetTickCount();
-    const TickType_t frequency = pdMS_TO_TICKS(60000);  // 1 minuto
+    // Calcola slot corrente (0-47)
+    int minute_of_day = timeinfo.tm_hour * 60 + timeinfo.tm_min;
+    int slot = minute_of_day / 30;  // 30 minuti per slot
 
-    while (1) {
-        // TODO: Lettura sensore temperatura/umidità
-        // TODO: Calcolo setpoint attivo
-        // TODO: Controllo relè con isteresi
-        // TODO: Salvataggio sample nello storico
+    if (slot >= SLOTS_PER_DAY) slot = SLOTS_PER_DAY - 1;
 
-        ESP_LOGI(TAG, "Thermostat tick - Free heap: %lu bytes", esp_get_free_heap_size());
+    // Leggi setpoint dal programma 0 (Standard)
+    float setpoint = g_config.programs[0][slot];
 
-        vTaskDelayUntil(&last_wake_time, frequency);
-    }
+    return setpoint;
 }
 
 /**
- * @brief Task di status (stampa ogni secondo)
+ * @brief Task di status (ogni secondo)
+ *
+ * Aggiorna simulazione sensore, display e registra sample allo scoccare del minuto.
  */
 static void status_task(void *pvParameters)
 {
@@ -69,9 +74,59 @@ static void status_task(void *pvParameters)
     // Wait for WiFi to be ready
     vTaskDelay(pdMS_TO_TICKS(2000));
 
+    static int last_minute = -1;  // Per rilevare cambio minuto
+    static int save_counter = 0;  // Contatore per salvataggio su flash
+
     while (1) {
+        // Ottieni ora corrente
+        time_t now;
+        struct tm timeinfo;
+        time(&now);
+        localtime_r(&now, &timeinfo);
+
         char time_str[32];
-        time_get_string(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S");
+        strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", &timeinfo);
+
+        // Calcola setpoint dal programma orario
+        float setpoint = get_current_setpoint();
+        sensor_sim_set_setpoint(setpoint);
+
+        // Aggiorna simulazione sensore (ogni secondo)
+        sensor_sim_update();
+
+        // Leggi valori simulati
+        float temperature = sensor_sim_get_temperature();
+        uint8_t humidity = sensor_sim_get_humidity();
+        uint16_t pressure = sensor_sim_get_pressure();
+        bool heater_on = sensor_sim_get_heater_state();
+
+        // Aggiorna stato globale
+        g_state.current_temperature = temperature;
+        g_state.current_humidity = humidity;
+        g_state.current_pressure = pressure;
+        g_state.relay_state = heater_on;
+        g_state.active_setpoint = setpoint;
+        g_state.active_bank = 0;  // Programma 0 (Standard)
+
+        // Rileva cambio minuto - registra sample esattamente allo scoccare
+        int current_minute = timeinfo.tm_min;
+        if (current_minute != last_minute && last_minute >= 0) {
+            // Nuovo minuto! Registra sample
+            esp_err_t ret = history_record(temperature, humidity, pressure,
+                                           setpoint, heater_on, g_config.manual_mode, 0);
+            if (ret == ESP_OK) {
+                ESP_LOGI(TAG, "Sample recorded at %02d:%02d - T=%.1f°C H=%d%% P=%d hPa",
+                         timeinfo.tm_hour, timeinfo.tm_min,
+                         temperature, humidity, pressure);
+            }
+
+            // Salva su flash ogni ora (60 minuti)
+            if (++save_counter >= 60) {
+                save_counter = 0;
+                history_save_to_file();
+            }
+        }
+        last_minute = current_minute;
 
         // Get WiFi RSSI
         wifi_ap_record_t ap_info;
@@ -80,19 +135,16 @@ static void status_task(void *pvParameters)
             rssi = ap_info.rssi;
         }
 
-        // Placeholder temperature and humidity
-        float temperature = 23.5f;
-        uint8_t humidity = 55;
-
         // Free heap
         uint32_t free_heap = esp_get_free_heap_size();
 
         // Update display with current status
-        display_update_status(temperature, humidity, false);
+        display_update_status(temperature, humidity, pressure, heater_on);
 
         // Print status line
-        printf("[%s] WiFi:%ddBm T:%.1f°C H:%d%% Heap:%lu\n",
-               time_str, rssi, temperature, humidity, free_heap);
+        printf("[%s] WiFi:%ddBm T:%.2f°C H:%d%% P:%dhPa Set:%.1f°C %s Heap:%lu\n",
+               time_str, rssi, temperature, humidity, pressure, setpoint,
+               heater_on ? "ON" : "OFF", free_heap);
 
         vTaskDelay(pdMS_TO_TICKS(1000));  // Ogni secondo
     }
@@ -182,8 +234,33 @@ static void init_default_config(void)
     g_config.sensor_sda = SENSOR_SDA;
     g_config.sensor_scl = SENSOR_SCL;
 
-    // Programmi di default (18°C tutto il giorno per tutti i banchi)
-    for (int bank = 0; bank < PROGRAMS_COUNT; bank++) {
+    // Programma 0: Standard (da config.json)
+    // Slot 0-13 (00:00-06:59): 16°C - Notte
+    // Slot 14-15 (07:00-07:59): 19°C - Risveglio
+    // Slot 16-33 (08:00-16:59): 21°C - Giorno
+    // Slot 34-35 (17:00-17:59): 20°C - Sera
+    // Slot 36-39 (18:00-19:59): 19°C
+    // Slot 40-43 (20:00-21:59): 18°C
+    // Slot 44-47 (22:00-23:59): 16°C - Notte
+    snprintf(g_config.program_names[0], PROGRAM_NAME_LEN, "Standard");
+    const float prog0[] = {
+        16.0f, 16.0f, 16.0f, 16.0f, 16.0f, 16.0f, 16.0f, 16.0f,  // 00:00-03:59
+        16.0f, 16.0f, 16.0f, 16.0f, 16.0f, 16.0f,                // 04:00-06:59
+        19.0f, 19.0f,                                             // 07:00-07:59
+        21.0f, 21.0f, 21.0f, 21.0f, 21.0f, 21.0f, 21.0f, 21.0f,  // 08:00-11:59
+        21.0f, 21.0f, 21.0f, 21.0f, 21.0f, 21.0f, 21.0f, 21.0f,  // 12:00-15:59
+        21.0f, 21.0f,                                             // 16:00-16:59
+        20.0f, 20.0f,                                             // 17:00-17:59
+        19.0f, 19.0f, 19.0f, 19.0f,                               // 18:00-19:59
+        18.0f, 18.0f, 17.0f, 17.0f,                               // 20:00-21:59
+        16.0f, 16.0f, 16.0f, 16.0f                                // 22:00-23:59
+    };
+    for (int slot = 0; slot < SLOTS_PER_DAY; slot++) {
+        g_config.programs[0][slot] = prog0[slot];
+    }
+
+    // Altri programmi: default 18°C
+    for (int bank = 1; bank < PROGRAMS_COUNT; bank++) {
         snprintf(g_config.program_names[bank], PROGRAM_NAME_LEN,
                  "Programma %d", bank + 1);
 
@@ -196,6 +273,7 @@ static void init_default_config(void)
     memset(&g_state, 0, sizeof(thermostat_state_t));
     g_state.current_temperature = 20.0f;
     g_state.current_humidity = 50;
+    g_state.current_pressure = 1013;  // hPa standard
     g_state.relay_state = false;
 
     ESP_LOGI(TAG, "Default configuration initialized");
@@ -223,9 +301,6 @@ extern "C" void app_main(void)
     // TODO: Carica configurazione salvata
     // config_load(&g_config);
 
-    // TODO: Inizializza history manager
-    // ESP_ERROR_CHECK(history_init());
-
     // Inizializza WiFi
     ESP_LOGI(TAG, "Initializing WiFi...");
     setup_wifi();
@@ -234,6 +309,18 @@ extern "C" void app_main(void)
     ESP_LOGI(TAG, "Starting NTP time sync...");
     time_sync_start();
 
+    // Aspetta sincronizzazione NTP prima di inizializzare history
+    // (necessario per avere la data corretta)
+    ESP_LOGI(TAG, "Waiting for NTP sync...");
+    vTaskDelay(pdMS_TO_TICKS(3000));
+
+    // Inizializza history manager (buffer in PSRAM)
+    ESP_LOGI(TAG, "Initializing history manager...");
+    esp_err_t hist_ret = history_init();
+    if (hist_ret != ESP_OK) {
+        ESP_LOGW(TAG, "History manager init failed: %s", esp_err_to_name(hist_ret));
+    }
+
     // TODO: Inizializza console/telnet
     // console_start();
     // telnet_start();
@@ -241,8 +328,14 @@ extern "C" void app_main(void)
     // TODO: Inizializza web server
     // http_server_start();
 
-    // TODO: Inizializza sensore temperatura
-    // sensor_init();
+    // Inizializza simulatore sensore (per testing senza hardware)
+    ESP_LOGI(TAG, "Initializing sensor simulator...");
+    sensor_sim_init(
+        18.0f,                  // Temperatura iniziale (sotto setpoint tipico)
+        50,                     // Umidità iniziale 50%
+        1000,                   // Pressione iniziale 1000 hPa
+        g_config.hysteresis     // Isteresi da configurazione
+    );
 
     // Inizializza display + touch
     ESP_LOGI(TAG, "Initializing display...");
@@ -250,24 +343,13 @@ extern "C" void app_main(void)
 
     ESP_LOGI(TAG, "Starting tasks...");
 
-    // Crea task termostato (CORE 0)
-    xTaskCreatePinnedToCore(
-        thermostat_task,
-        "thermostat",
-        4096,
-        NULL,
-        5,  // Priorità alta
-        NULL,
-        0   // Core 0
-    );
-
-    // Crea task status (CORE 0)
+    // Crea task status (CORE 0) - gestisce anche registrazione sample ogni minuto
     xTaskCreatePinnedToCore(
         status_task,
         "status",
         4096,
         NULL,
-        1,  // Priorità bassa
+        5,  // Priorità alta
         NULL,
         0   // Core 0
     );
