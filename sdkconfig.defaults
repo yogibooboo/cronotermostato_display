@@ -1,2 +1,11 @@
 # LVGL requires a high tick rate for smooth operation
 CONFIG_FREERTOS_HZ=1000
+
+# Task Watchdog - rileva task bloccati
+CONFIG_ESP_TASK_WDT_EN=y
+CONFIG_ESP_TASK_WDT_TIMEOUT_S=10
+CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0=y
+CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU1=y
+
+# USB Serial/JTAG Console per ESP32-S3 (USB nativo)
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y

@@ -35,13 +35,17 @@ extern "C" {
 // Backlight PWM
 #define GFX_BL      1
 
-// Sensore AHT10 I2C (può condividere il bus con Touch)
-#define SENSOR_SDA  4
-#define SENSOR_SCL  8
-#define SENSOR_ADDR 0x38
+// Sensore BME280 I2C (bus dedicato)
+#define SENSOR_SDA  15
+#define SENSOR_SCL  16
+#define BME280_ADDR 0x76    // Indirizzo BME280 (SDO a GND), 0x77 se SDO a VCC
 
-// Relè caldaia (da assegnare su GPIO disponibile)
-#define RELAY_GPIO  19  // TODO: verificare GPIO libero
+// Alimentazione sensore BME280 via GPIO
+#define SENSOR_GND  46      // GPIO per GND sensore (output LOW)
+#define SENSOR_VCC  9       // GPIO per VCC sensore (output HIGH)
+
+// Relè caldaia
+#define RELAY_GPIO  17
 
 // LED WiFi status (active LOW - acceso quando output = 0)
 #define LED_WIFI    GPIO_NUM_6

@@ -108,6 +108,22 @@
         .value-box.press .value { color: #9966ff; }
         .value-box.setpoint .value { color: #000000; }
 
+        /* Stile per serie toggle-abili */
+        .value-box.toggleable {
+            cursor: pointer;
+            transition: opacity 0.2s, background-color 0.2s;
+        }
+        .value-box.toggleable:hover {
+            background: #e0e0e0;
+        }
+        .value-box.toggleable.disabled {
+            opacity: 0.4;
+            background: #ddd;
+        }
+        .value-box.toggleable.disabled .value {
+            color: #999 !important;
+        }
+
         .value-box.heater {
             display: flex;
             flex-direction: column;
@@ -125,6 +141,13 @@
 
         .heater-dot.on { background-color: #e53935; }
         .heater-dot.off { background-color: #333; }
+
+        .heater-time {
+            font-size: 0.85em;
+            color: #e53935;
+            font-weight: bold;
+            margin-top: 2px;
+        }
 
         /* Grafico */
         .chart-wrapper {
@@ -244,25 +267,26 @@
                 <div class="time" id="currentTime">--:--:--</div>
             </div>
             <div class="current-values">
-                <div class="value-box temp">
+                <div class="value-box temp toggleable" id="toggleTemp" onclick="toggleSeries('temp')">
                     <div class="label">Temperatura</div>
                     <div class="value" id="currentTemp">--.-°C</div>
                 </div>
-                <div class="value-box hum">
+                <div class="value-box hum toggleable disabled" id="toggleHum" onclick="toggleSeries('hum')">
                     <div class="label">Umidità</div>
                     <div class="value" id="currentHum">--%</div>
                 </div>
-                <div class="value-box press">
+                <div class="value-box press toggleable disabled" id="togglePress" onclick="toggleSeries('press')">
                     <div class="label">Pressione</div>
                     <div class="value" id="currentPress">---- hPa</div>
                 </div>
-                <div class="value-box setpoint">
+                <div class="value-box setpoint toggleable" id="toggleSetpoint" onclick="toggleSeries('setpoint')">
                     <div class="label">Setpoint</div>
                     <div class="value" id="currentSetpoint">--.-°C</div>
                 </div>
                 <div class="value-box heater">
                     <div class="label">Caldaia</div>
                     <div class="heater-dot off" id="heaterDot"></div>
+                    <div class="heater-time" id="heaterTime">--:--</div>
                 </div>
             </div>
         </div>
@@ -300,6 +324,46 @@
         let lastMinute = -1;  // Per rilevare cambio minuto dal termostato
         let programSlots = null;  // 48 valori del programma attivo
         let isViewingToday = true;  // true = oggi (usa programma), false = storico (usa log)
+
+        // Stato visibilità serie (indici in uPlot: 1=heater, 2=temp, 3=hum, 4=setpoint, 5=press)
+        let seriesVisible = {
+            temp: true,
+            hum: false,       // Default: disabilitata
+            setpoint: true,
+            press: false      // Default: disabilitata
+        };
+
+        // Toggle visibilità serie nel grafico
+        function toggleSeries(seriesName) {
+            seriesVisible[seriesName] = !seriesVisible[seriesName];
+
+            // Aggiorna classe CSS del box
+            const box = document.getElementById('toggle' + seriesName.charAt(0).toUpperCase() + seriesName.slice(1));
+            if (box) {
+                if (seriesVisible[seriesName]) {
+                    box.classList.remove('disabled');
+                } else {
+                    box.classList.add('disabled');
+                }
+            }
+
+            // Aggiorna visibilità serie in uPlot
+            if (uplot) {
+                // Mappa nome serie -> indice uPlot
+                // Ordine: 0=X, 1=heater, 2=temp, 3=hum, 4=setpoint, 5=press
+                const seriesIndex = {
+                    temp: 2,
+                    hum: 3,
+                    setpoint: 4,
+                    press: 5
+                };
+
+                const idx = seriesIndex[seriesName];
+                if (idx !== undefined) {
+                    uplot.setSeries(idx, { show: seriesVisible[seriesName] });
+                }
+            }
+        }
 
         const giorniSettimana = ['domenica', 'lunedì', 'martedì', 'mercoledì', 'giovedì', 'venerdì', 'sabato'];
         const mesi = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno',
@@ -429,6 +493,7 @@
                 if (parsedData.timestamps.length === 0) return;
 
                 chartData = parsedData;
+                updateHeaterOnTimeDisplay();
 
                 // Aggiorna dati nel grafico esistente (senza ricreare)
                 if (uplot) {
@@ -510,6 +575,7 @@
                 chartData = parsedData;
                 isViewingToday = true;
                 renderChart(parsedData);
+                updateHeaterOnTimeDisplay();
                 loading.style.display = 'none';
 
                 // Avvia primo polling status
@@ -559,6 +625,29 @@
             }
 
             return { timestamps, temps, hums, setpoints, pressures, heaters };
+        }
+
+        // Calcola tempo totale accensione caldaia (ritorna stringa hh:mm)
+        function calculateHeaterOnTime(heaters) {
+            if (!heaters || heaters.length === 0) return '--:--';
+
+            // Conta i minuti in cui la caldaia è ON (ogni sample = 1 minuto)
+            let minutesOn = 0;
+            for (let i = 0; i < heaters.length; i++) {
+                if (heaters[i] === 1) minutesOn++;
+            }
+
+            const hours = Math.floor(minutesOn / 60);
+            const mins = minutesOn % 60;
+            return hours.toString().padStart(2, '0') + ':' + mins.toString().padStart(2, '0');
+        }
+
+        // Aggiorna display tempo accensione caldaia
+        function updateHeaterOnTimeDisplay() {
+            if (chartData && chartData.heaters) {
+                const onTime = calculateHeaterOnTime(chartData.heaters);
+                document.getElementById('heaterTime').textContent = onTime;
+            }
         }
 
         // Render grafico con uPlot
@@ -649,7 +738,11 @@
                                 if (ydata[i] === null) continue;
 
                                 const x0 = u.valToPos(xdata[i], 'x', true);
-                                const x1 = i < idx1 ? u.valToPos(xdata[i+1], 'x', true) : x0 + 1;
+
+                                // Estendi di 1 minuto (60 secondi) dal timestamp corrente
+                                // Questo rappresenta che per quel minuto la caldaia era in quello stato
+                                const x1 = u.valToPos(xdata[i] + 60, 'x', true);
+
                                 const y0 = u.valToPos(0, 'y4', true);
                                 const y1 = u.valToPos(ydata[i], 'y4', true);
 
@@ -659,11 +752,6 @@
 
                                 path.moveTo(x0, y1);
                                 path.lineTo(x1, y1);
-
-                                if (i < idx1 && ydata[i+1] !== null && ydata[i+1] !== ydata[i]) {
-                                    const yNext = u.valToPos(ydata[i+1], 'y4', true);
-                                    path.lineTo(x1, yNext);
-                                }
                             }
 
                             return { stroke: path, fill: fillPath };
@@ -673,25 +761,29 @@
                         label: "Temperatura",
                         stroke: "#ff6384",
                         width: 2,
-                        scale: 'y'
+                        scale: 'y',
+                        show: seriesVisible.temp
                     },
                     {
                         label: "Umidità",
                         stroke: "#36a2eb",
                         width: 2,
-                        scale: 'y2'
+                        scale: 'y2',
+                        show: seriesVisible.hum
                     },
                     {
                         label: "Setpoint",
                         stroke: "#000000",
                         width: 2,
-                        scale: 'y'
+                        scale: 'y',
+                        show: seriesVisible.setpoint
                     },
                     {
                         label: "Pressione",
                         stroke: "#9966ff",
                         width: 2,
-                        scale: 'y3'
+                        scale: 'y3',
+                        show: seriesVisible.press
                     }
                 ],
                 plugins: [
@@ -845,27 +937,31 @@
                                     max: newCenterY + newRangeY / 2
                                 });
 
-                                // Applica zoom + pan combinati su Y2
-                                const newRangeY2 = initialScaleY2 * zoomFactorY;
-                                const initialCenterY2 = (panTouchScaleY2Min + panTouchScaleY2Max) / 2;
-                                const pxPerUnitY2 = u.bbox.height / initialScaleY2;
-                                const panOffsetY2 = panDeltaY / pxPerUnitY2;
-                                const newCenterY2 = initialCenterY2 + panOffsetY2;
-                                u.setScale('y2', {
-                                    min: newCenterY2 - newRangeY2 / 2,
-                                    max: newCenterY2 + newRangeY2 / 2
-                                });
+                                // Applica zoom + pan combinati su Y2 (solo se umidità visibile)
+                                if (seriesVisible.hum) {
+                                    const newRangeY2 = initialScaleY2 * zoomFactorY;
+                                    const initialCenterY2 = (panTouchScaleY2Min + panTouchScaleY2Max) / 2;
+                                    const pxPerUnitY2 = u.bbox.height / initialScaleY2;
+                                    const panOffsetY2 = panDeltaY / pxPerUnitY2;
+                                    const newCenterY2 = initialCenterY2 + panOffsetY2;
+                                    u.setScale('y2', {
+                                        min: newCenterY2 - newRangeY2 / 2,
+                                        max: newCenterY2 + newRangeY2 / 2
+                                    });
+                                }
 
-                                // Applica zoom + pan combinati su Y3 (pressione)
-                                const newRangeY3 = initialScaleY3 * zoomFactorY;
-                                const initialCenterY3 = (panTouchScaleY3Min + panTouchScaleY3Max) / 2;
-                                const pxPerUnitY3 = u.bbox.height / initialScaleY3;
-                                const panOffsetY3 = panDeltaY / pxPerUnitY3;
-                                const newCenterY3 = initialCenterY3 + panOffsetY3;
-                                u.setScale('y3', {
-                                    min: newCenterY3 - newRangeY3 / 2,
-                                    max: newCenterY3 + newRangeY3 / 2
-                                });
+                                // Applica zoom + pan combinati su Y3 (solo se pressione visibile)
+                                if (seriesVisible.press) {
+                                    const newRangeY3 = initialScaleY3 * zoomFactorY;
+                                    const initialCenterY3 = (panTouchScaleY3Min + panTouchScaleY3Max) / 2;
+                                    const pxPerUnitY3 = u.bbox.height / initialScaleY3;
+                                    const panOffsetY3 = panDeltaY / pxPerUnitY3;
+                                    const newCenterY3 = initialCenterY3 + panOffsetY3;
+                                    u.setScale('y3', {
+                                        min: newCenterY3 - newRangeY3 / 2,
+                                        max: newCenterY3 + newRangeY3 / 2
+                                    });
+                                }
 
                             } else if (e.touches.length === 1) {
                                 // Hover con 1 dito
@@ -942,21 +1038,25 @@
                                     max: panScaleYMax + yDelta
                                 });
 
-                                // Pan Y2 (umidità)
-                                const pxPerUnitY2 = u.bbox.height / (panScaleY2Max - panScaleY2Min);
-                                const y2Delta = deltaY / pxPerUnitY2;
-                                u.setScale('y2', {
-                                    min: panScaleY2Min + y2Delta,
-                                    max: panScaleY2Max + y2Delta
-                                });
+                                // Pan Y2 (umidità) - solo se visibile
+                                if (seriesVisible.hum) {
+                                    const pxPerUnitY2 = u.bbox.height / (panScaleY2Max - panScaleY2Min);
+                                    const y2Delta = deltaY / pxPerUnitY2;
+                                    u.setScale('y2', {
+                                        min: panScaleY2Min + y2Delta,
+                                        max: panScaleY2Max + y2Delta
+                                    });
+                                }
 
-                                // Pan Y3 (pressione)
-                                const pxPerUnitY3 = u.bbox.height / (panScaleY3Max - panScaleY3Min);
-                                const y3Delta = deltaY / pxPerUnitY3;
-                                u.setScale('y3', {
-                                    min: panScaleY3Min + y3Delta,
-                                    max: panScaleY3Max + y3Delta
-                                });
+                                // Pan Y3 (pressione) - solo se visibile
+                                if (seriesVisible.press) {
+                                    const pxPerUnitY3 = u.bbox.height / (panScaleY3Max - panScaleY3Min);
+                                    const y3Delta = deltaY / pxPerUnitY3;
+                                    u.setScale('y3', {
+                                        min: panScaleY3Min + y3Delta,
+                                        max: panScaleY3Max + y3Delta
+                                    });
+                                }
                             }
                         });
 

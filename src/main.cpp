@@ -21,8 +21,10 @@
 #include "time_sync.h"
 #include "history_manager.h"
 #include "sensor_simulator.h"
+#include "bme280_sensor.h"
 #include "esp_wifi.h"
 #include "display_manager.h"
+#include "esp_task_wdt.h"
 
 static const char *TAG = "MAIN";
 
@@ -32,6 +34,8 @@ static const char *TAG = "MAIN";
 
 thermostat_config_t g_config;   // Non-static per accesso da status_api.cpp
 thermostat_state_t g_state;     // Non-static per accesso da status_api.cpp
+
+static bool use_real_sensor = false;  // true se BME280 disponibile
 
 // ============================================================================
 // Tasks
@@ -71,6 +75,10 @@ static void status_task(void *pvParameters)
 {
     ESP_LOGI(TAG, "Status task started on core %d", xPortGetCoreID());
 
+    // Aggiungi questo task al Task Watchdog (timeout 10s)
+    esp_task_wdt_add(NULL);
+    ESP_LOGI(TAG, "Status task added to Task Watchdog");
+
     // Wait for WiFi to be ready
     vTaskDelay(pdMS_TO_TICKS(2000));
 
@@ -89,16 +97,55 @@ static void status_task(void *pvParameters)
 
         // Calcola setpoint dal programma orario
         float setpoint = get_current_setpoint();
-        sensor_sim_set_setpoint(setpoint);
 
-        // Aggiorna simulazione sensore (ogni secondo)
-        sensor_sim_update();
+        // Leggi sensore (BME280 reale o simulatore)
+        float temperature;
+        uint8_t humidity;
+        uint16_t pressure;
+        bool heater_on;
 
-        // Leggi valori simulati
-        float temperature = sensor_sim_get_temperature();
-        uint8_t humidity = sensor_sim_get_humidity();
-        uint16_t pressure = sensor_sim_get_pressure();
-        bool heater_on = sensor_sim_get_heater_state();
+        if (use_real_sensor) {
+            // Leggi dal BME280
+            bme280_data_t sensor_data;
+            if (bme280_read(&sensor_data) == ESP_OK && sensor_data.valid) {
+                temperature = sensor_data.temperature + g_config.temp_correction;
+                humidity = (uint8_t)sensor_data.humidity;
+                pressure = (uint16_t)sensor_data.pressure;
+
+                // Controllo caldaia con isteresi
+                static bool last_heater_state = false;
+                float threshold_on = setpoint - g_config.hysteresis;
+                float threshold_off = setpoint + g_config.hysteresis;
+
+                if (temperature < threshold_on) {
+                    heater_on = true;
+                } else if (temperature > threshold_off) {
+                    heater_on = false;
+                } else {
+                    heater_on = last_heater_state;  // Mantieni stato precedente
+                }
+                last_heater_state = heater_on;
+
+                // TODO: Attiva relè fisico quando implementato
+                // gpio_set_level(RELAY_GPIO, heater_on ? 1 : 0);
+            } else {
+                // Lettura fallita, usa ultimi valori
+                temperature = g_state.current_temperature;
+                humidity = g_state.current_humidity;
+                pressure = g_state.current_pressure;
+                heater_on = g_state.relay_state;
+                ESP_LOGW(TAG, "BME280 read failed, using cached values");
+            }
+        } else {
+            // Usa simulatore
+            sensor_sim_set_setpoint(setpoint);
+            sensor_sim_update();
+
+            temperature = sensor_sim_get_temperature();
+            humidity = sensor_sim_get_humidity();
+            pressure = sensor_sim_get_pressure();
+            heater_on = sensor_sim_get_heater_state();
+        }
 
         // Aggiorna stato globale
         g_state.current_temperature = temperature;
@@ -139,12 +186,15 @@ static void status_task(void *pvParameters)
         uint32_t free_heap = esp_get_free_heap_size();
 
         // Update display with current status
-        display_update_status(temperature, humidity, pressure, heater_on);
+        display_update_status(temperature, timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec, heater_on);
 
         // Print status line
         printf("[%s] WiFi:%ddBm T:%.2f°C H:%d%% P:%dhPa Set:%.1f°C %s Heap:%lu\n",
                time_str, rssi, temperature, humidity, pressure, setpoint,
                heater_on ? "ON" : "OFF", free_heap);
+
+        // Reset Task Watchdog - dimostra che il task è vivo
+        esp_task_wdt_reset();
 
         vTaskDelay(pdMS_TO_TICKS(1000));  // Ogni secondo
     }
@@ -328,18 +378,33 @@ extern "C" void app_main(void)
     // TODO: Inizializza web server
     // http_server_start();
 
-    // Inizializza simulatore sensore (per testing senza hardware)
-    ESP_LOGI(TAG, "Initializing sensor simulator...");
-    sensor_sim_init(
-        18.0f,                  // Temperatura iniziale (sotto setpoint tipico)
-        50,                     // Umidità iniziale 50%
-        1000,                   // Pressione iniziale 1000 hPa
-        g_config.hysteresis     // Isteresi da configurazione
-    );
+    // Inizializza sensore BME280
+    ESP_LOGI(TAG, "Initializing BME280 sensor...");
+    if (bme280_init() == ESP_OK) {
+        ESP_LOGI(TAG, "BME280 sensor initialized - using real sensor");
+        use_real_sensor = true;
+    } else {
+        ESP_LOGW(TAG, "BME280 not found - using sensor simulator");
+        use_real_sensor = false;
+
+        // Inizializza simulatore sensore come fallback
+        sensor_sim_init(
+            18.0f,                  // Temperatura iniziale (sotto setpoint tipico)
+            50,                     // Umidità iniziale 50%
+            1000,                   // Pressione iniziale 1000 hPa
+            g_config.hysteresis     // Isteresi da configurazione
+        );
+    }
 
     // Inizializza display + touch
     ESP_LOGI(TAG, "Initializing display...");
     ESP_ERROR_CHECK(display_init());
+
+    // Carica programma giornaliero sul display
+    display_set_program(g_config.programs[0], SLOTS_PER_DAY);
+
+    // Carica temperature dallo storico (se presenti)
+    display_load_history_temperatures();
 
     ESP_LOGI(TAG, "Starting tasks...");
 
@@ -347,7 +412,7 @@ extern "C" void app_main(void)
     xTaskCreatePinnedToCore(
         status_task,
         "status",
-        4096,
+        8192,   // Aumentato da 4096 per evitare stack overflow
         NULL,
         5,  // Priorità alta
         NULL,
