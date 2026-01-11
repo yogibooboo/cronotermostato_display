@@ -65,6 +65,16 @@ esp_err_t log_raw_handler(httpd_req_t *req);
  */
 esp_err_t log_current_handler(httpd_req_t *req);
 
+/**
+ * @brief List available log files
+ *
+ * Returns JSON array of available log dates.
+ *
+ * @param req HTTP request
+ * @return ESP_OK on success
+ */
+esp_err_t log_list_handler(httpd_req_t *req);
+
 #ifdef __cplusplus
 }
 #endif

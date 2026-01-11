@@ -23,6 +23,48 @@
                 else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
             }
         }
+
+        function showHelp() {
+            const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+            const content = document.getElementById('helpContent');
+
+            if (isTouchDevice) {
+                content.innerHTML = `
+                    <h3>Controlli Touch</h3>
+                    <ul>
+                        <li><b>1 dito sul grafico</b>: scorri (pan) in tutte le direzioni</li>
+                        <li><b>1 dito sull'asse X</b> (zona bassa): sposta il cursore per leggere i valori</li>
+                        <li><b>2 dita - pinch orizzontale</b>: zoom sul tempo</li>
+                        <li><b>2 dita - pinch verticale</b>: zoom sulla temperatura</li>
+                    </ul>
+                    <h3>Serie</h3>
+                    <ul>
+                        <li>Tocca i box in alto per mostrare/nascondere le serie</li>
+                        <li>Umidità e Pressione sono nascoste di default</li>
+                    </ul>
+                `;
+            } else {
+                content.innerHTML = `
+                    <h3>Controlli Desktop</h3>
+                    <ul>
+                        <li><b>Rotella mouse</b>: zoom orizzontale (tempo)</li>
+                        <li><b>Tasto centrale/destro + trascinamento</b>: pan in tutte le direzioni</li>
+                        <li><b>Hover</b>: mostra i valori nel cursore</li>
+                    </ul>
+                    <h3>Serie</h3>
+                    <ul>
+                        <li>Clicca sui box in alto per mostrare/nascondere le serie</li>
+                        <li>Umidità e Pressione sono nascoste di default</li>
+                    </ul>
+                `;
+            }
+
+            document.getElementById('helpOverlay').classList.add('visible');
+        }
+
+        function hideHelp() {
+            document.getElementById('helpOverlay').classList.remove('visible');
+        }
     </script>
 
     <!-- uPlot CSS con fallback locale -->
@@ -80,6 +122,12 @@
 
         .datetime .date { font-weight: bold; }
         .datetime .time { font-size: 1.2em; color: #667eea; }
+        .datetime .program-name {
+            font-size: 0.9em;
+            color: #4caf50;
+            font-weight: 500;
+            margin-top: 2px;
+        }
 
         .current-values {
             display: flex;
@@ -117,11 +165,10 @@
             background: #e0e0e0;
         }
         .value-box.toggleable.disabled {
-            opacity: 0.4;
-            background: #ddd;
+            background: #f0f0f0;
         }
-        .value-box.toggleable.disabled .value {
-            color: #999 !important;
+        .value-box.toggleable.disabled .label {
+            color: #bbb;
         }
 
         .value-box.heater {
@@ -212,11 +259,53 @@
             cursor: pointer;
         }
 
-        .commands-help {
-            text-align: center;
-            font-size: 0.7em;
-            color: #888;
-            margin: 3px 0;
+        /* Help dialog */
+        .help-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        .help-overlay.visible {
+            display: flex;
+        }
+        .help-box {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            max-width: 90%;
+            max-height: 80%;
+            overflow: auto;
+            position: relative;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        .help-close {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            font-size: 24px;
+            cursor: pointer;
+            color: #666;
+        }
+        .help-close:hover {
+            color: #000;
+        }
+        #helpContent h3 {
+            margin-top: 0;
+            color: #667eea;
+        }
+        #helpContent ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        #helpContent li {
+            margin: 5px 0;
         }
 
         /* Responsive */
@@ -256,6 +345,482 @@
             text-align: center;
             margin: 10px 0;
         }
+
+        /* Pulsanti giorni settimana */
+        .day-buttons {
+            display: flex;
+            gap: 4px;
+        }
+        .day-btn {
+            width: 28px;
+            height: 28px;
+            padding: 0;
+            font-size: 11px;
+            font-weight: bold;
+            background: #e0e0e0;
+            color: #333;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .day-btn:hover {
+            background: #d0d0d0;
+        }
+        .day-btn.selected {
+            background: #667eea;
+            color: white;
+            border-color: #5568d8;
+        }
+        .day-btn.unavailable {
+            opacity: 0.4;
+            cursor: default;
+        }
+
+        /* Calendario popup */
+        .calendar-container {
+            position: relative;
+            display: inline-block;
+        }
+        .calendar-btn {
+            padding: 6px 12px;
+            background: #4caf50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 13px;
+            cursor: pointer;
+        }
+        .calendar-btn:hover {
+            background: #43a047;
+        }
+        .calendar-popup {
+            display: none;
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            padding: 10px;
+            z-index: 100;
+            margin-bottom: 5px;
+        }
+        .calendar-popup.visible {
+            display: block;
+        }
+        .calendar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .calendar-header button {
+            padding: 4px 8px;
+            font-size: 14px;
+            background: #f0f0f0;
+            color: #333;
+            border: 1px solid #ccc;
+        }
+        .calendar-header button:hover {
+            background: #e0e0e0;
+        }
+        .calendar-title {
+            font-weight: bold;
+            font-size: 14px;
+        }
+        .calendar-weekdays {
+            display: grid;
+            grid-template-columns: repeat(7, 32px);
+            gap: 2px;
+            margin-bottom: 4px;
+        }
+        .calendar-weekday {
+            text-align: center;
+            font-size: 10px;
+            color: #666;
+            font-weight: bold;
+        }
+        .calendar-days {
+            display: grid;
+            grid-template-columns: repeat(7, 32px);
+            gap: 2px;
+        }
+        .calendar-day {
+            width: 32px;
+            height: 32px;
+            border: none;
+            background: #f5f5f5;
+            color: #999;
+            font-size: 12px;
+            cursor: default;
+            border-radius: 4px;
+        }
+        .calendar-day.available {
+            background: #e8f5e9;
+            color: #333;
+            cursor: pointer;
+        }
+        .calendar-day.available:hover {
+            background: #c8e6c9;
+        }
+        .calendar-day.today {
+            background: #fff3e0;
+            color: #333;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .calendar-day.today:hover {
+            background: #ffe0b2;
+        }
+        .calendar-day.selected {
+            background: #667eea;
+            color: white;
+        }
+        .calendar-day.selected:hover {
+            background: #5568d8;
+        }
+        .calendar-day.other-month {
+            color: #ccc;
+        }
+
+        /* Settings dialog */
+        .settings-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            overflow: auto;
+            padding: 10px;
+        }
+        .settings-overlay.visible {
+            display: flex;
+        }
+        .settings-box {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            max-width: 95%;
+            width: 400px;
+            max-height: 90%;
+            overflow: auto;
+            position: relative;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        .settings-close {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            font-size: 24px;
+            cursor: pointer;
+            color: #666;
+        }
+        .settings-close:hover {
+            color: #000;
+        }
+        .settings-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 15px;
+            padding-right: 30px;
+        }
+        .settings-columns {
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+        }
+        .settings-column {
+            flex: 1;
+        }
+        .settings-section {
+            margin-bottom: 15px;
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        .settings-section-title {
+            font-weight: bold;
+            font-size: 14px;
+            color: #333;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .settings-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            gap: 10px;
+        }
+        .settings-row:last-child {
+            margin-bottom: 0;
+        }
+        .settings-label {
+            font-size: 13px;
+            color: #555;
+            min-width: 80px;
+        }
+        .settings-select {
+            flex: 1;
+            padding: 6px 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 13px;
+            max-width: 180px;
+        }
+        .settings-checkbox {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+        .settings-radio {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+            margin-right: 6px;
+        }
+        .settings-radio-label {
+            display: flex;
+            align-items: center;
+            font-size: 13px;
+            color: #555;
+            cursor: pointer;
+            margin-right: 15px;
+        }
+        .settings-radio-group {
+            display: flex;
+            margin-bottom: 10px;
+        }
+        .settings-date {
+            padding: 6px 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 13px;
+            width: 130px;
+        }
+        .settings-date.invalid {
+            border-color: #e53935;
+            background: #ffebee;
+        }
+        .settings-error {
+            color: #e53935;
+            font-size: 11px;
+            margin-top: 4px;
+            display: none;
+        }
+        .settings-error.visible {
+            display: block;
+        }
+        .settings-week-grid {
+            display: grid;
+            grid-template-columns: 80px 1fr;
+            gap: 6px;
+            align-items: center;
+        }
+        .settings-day-label {
+            font-size: 12px;
+            color: #666;
+        }
+        .settings-day-label.fixed-label {
+            font-weight: bold;
+            color: #667eea;
+        }
+        .settings-buttons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+        }
+        .settings-btn {
+            padding: 8px 20px;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .settings-btn.primary {
+            background: #667eea;
+            color: white;
+        }
+        .settings-btn.secondary {
+            background: #e0e0e0;
+            color: #333;
+        }
+        .settings-btn:hover {
+            opacity: 0.9;
+        }
+        /* Layout a due colonne per landscape/desktop */
+        @media (min-width: 700px) {
+            .settings-box {
+                width: 680px;
+                max-width: 95%;
+            }
+            .settings-columns {
+                flex-direction: row;
+                gap: 20px;
+            }
+            .settings-column {
+                flex: 1;
+                min-width: 0;
+            }
+        }
+
+        /* Desktop only elements */
+        .desktop-only {
+            display: none;
+        }
+        @media (min-width: 768px) {
+            .desktop-only {
+                display: inline-block;
+            }
+        }
+
+        /* Control groups */
+        .control-group {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        /* Programming mode styles */
+        .prog-time-buttons {
+            display: flex;
+            gap: 2px;
+            background: #e0e0e0;
+            border-radius: 4px;
+            padding: 2px;
+        }
+        .prog-time-btn {
+            padding: 6px 10px;
+            background: transparent;
+            color: #333;
+            border: none;
+            border-radius: 3px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        .prog-time-btn:hover {
+            background: #d0d0d0;
+        }
+        .prog-time-btn.selected {
+            background: #667eea;
+            color: white;
+        }
+        .prog-select-group {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .prog-label {
+            font-size: 12px;
+            color: #555;
+        }
+        .prog-select {
+            padding: 5px 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 12px;
+            max-width: 120px;
+        }
+        .prog-btn-enter {
+            background: #ffc107;
+            color: #333;
+        }
+        .prog-btn-enter:hover {
+            background: #ffb300;
+        }
+        .prog-btn-save {
+            background: #ffc107;
+            color: #333;
+        }
+        .prog-btn-save:hover {
+            background: #ffb300;
+        }
+        .prog-btn-cancel {
+            background: #ffc107;
+            color: #333;
+        }
+        .prog-btn-cancel:hover {
+            background: #ffb300;
+        }
+
+        /* Save program dialog */
+        .save-prog-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        .save-prog-overlay.visible {
+            display: flex;
+        }
+        .save-prog-box {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            max-width: 90%;
+            width: 350px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        .save-prog-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 15px;
+        }
+        .save-prog-content {
+            margin-bottom: 15px;
+        }
+        .save-prog-content p {
+            margin-bottom: 10px;
+            color: #333;
+        }
+        .save-prog-content .prog-select {
+            width: 100%;
+            max-width: none;
+        }
+        .save-prog-buttons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        /* Drag tooltip per programmazione */
+        .drag-tooltip {
+            display: none;
+            position: absolute;
+            background: rgba(0, 0, 0, 0.8);
+            color: #4caf50;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: bold;
+            pointer-events: none;
+            z-index: 100;
+            white-space: nowrap;
+        }
+        .drag-tooltip.visible {
+            display: block;
+        }
     </style>
 </head>
 <body>
@@ -265,6 +830,7 @@
             <div class="datetime">
                 <div class="date" id="currentDate">--/--/----</div>
                 <div class="time" id="currentTime">--:--:--</div>
+                <div class="program-name" id="currentProgram">--</div>
             </div>
             <div class="current-values">
                 <div class="value-box temp toggleable" id="toggleTemp" onclick="toggleSeries('temp')">
@@ -283,7 +849,7 @@
                     <div class="label">Setpoint</div>
                     <div class="value" id="currentSetpoint">--.-°C</div>
                 </div>
-                <div class="value-box heater">
+                <div class="value-box heater toggleable" id="toggleHeater" onclick="toggleSeries('heater')">
                     <div class="label">Caldaia</div>
                     <div class="heater-dot off" id="heaterDot"></div>
                     <div class="heater-time" id="heaterTime">--:--</div>
@@ -304,17 +870,190 @@
                 <div class="leg-row"><span class="leg-label">Setpoint:</span> <span id="leg-set" class="leg-val leg-set">--.-°C</span></div>
             </div>
             <div id="chart"></div>
-        </div>
-
-        <div class="commands-help">
-            <b>Desktop</b>: rotella zoom, centrale/destro pan, trascina selezione • <b>Touch</b>: 1 dito hover, 2 dita pan + pinch zoom
+            <!-- Tooltip per drag programmazione -->
+            <div id="dragTooltip" class="drag-tooltip"></div>
         </div>
 
         <!-- Controlli -->
         <div class="controls">
-            <button onclick="resetZoom()">Reset Zoom</button>
-            <button onclick="toggleFullscreen()" id="fsBtn">Fullscreen</button>
-            <button onclick="window.location.href='/update'">Update</button>
+            <div class="day-buttons" id="dayButtons">
+                <!-- Pulsanti L M M G V S D generati dinamicamente -->
+            </div>
+            <div class="calendar-container" id="calendarContainer">
+                <button class="calendar-btn" id="calendarBtn" onclick="toggleCalendar()">Oggi</button>
+                <div id="calendarPopup" class="calendar-popup">
+                    <div class="calendar-header">
+                        <button onclick="changeMonth(-1)">&lt;</button>
+                        <span class="calendar-title" id="calendarTitle">Gennaio 2026</span>
+                        <button onclick="changeMonth(1)">&gt;</button>
+                    </div>
+                    <div class="calendar-weekdays">
+                        <span class="calendar-weekday">L</span>
+                        <span class="calendar-weekday">M</span>
+                        <span class="calendar-weekday">M</span>
+                        <span class="calendar-weekday">G</span>
+                        <span class="calendar-weekday">V</span>
+                        <span class="calendar-weekday">S</span>
+                        <span class="calendar-weekday">D</span>
+                    </div>
+                    <div class="calendar-days" id="calendarDays">
+                        <!-- Giorni generati dinamicamente -->
+                    </div>
+                </div>
+            </div>
+            <!-- Pulsanti modalità normale -->
+            <div id="normalControls" class="control-group">
+                <button class="prog-btn-enter" onclick="enterProgMode()">Prog</button>
+                <button onclick="resetZoom()">Reset Zoom</button>
+                <button onclick="showSettings()">Impostazioni</button>
+                <button onclick="toggleFullscreen()" id="fsBtn">Fullscreen</button>
+                <button onclick="window.location.href='/update'" class="desktop-only">Update</button>
+                <button onclick="showHelp()">Help</button>
+            </div>
+            <!-- Pulsanti modalità programmazione -->
+            <div id="progControls" class="control-group" style="display: none;">
+                <button class="prog-btn-save" onclick="showSaveProgDialog()">Salva</button>
+                <button class="prog-btn-cancel" onclick="exitProgMode()">Annulla</button>
+                <div class="prog-time-buttons">
+                    <button class="prog-time-btn selected" data-resolution="30" onclick="setProgResolution(30)">1/2h</button>
+                    <button class="prog-time-btn" data-resolution="60" onclick="setProgResolution(60)">1h</button>
+                    <button class="prog-time-btn" data-resolution="1440" onclick="setProgResolution(1440)">24h</button>
+                </div>
+                <div class="prog-select-group">
+                    <span class="prog-label">Modello:</span>
+                    <select id="progModello" class="prog-select"></select>
+                </div>
+                <div class="prog-select-group">
+                    <span class="prog-label">Destinazione:</span>
+                    <select id="progDestinazione" class="prog-select"></select>
+                </div>
+                <button onclick="resetZoom()">Reset Zoom</button>
+            </div>
+        </div>
+
+        <!-- Save program confirmation dialog -->
+        <div id="saveProgOverlay" class="save-prog-overlay" onclick="hideSaveProgDialog()">
+            <div class="save-prog-box" onclick="event.stopPropagation()">
+                <div class="save-prog-title">Conferma salvataggio</div>
+                <div class="save-prog-content">
+                    <p>Vuoi veramente salvare l'impostazione nel programma</p>
+                    <select id="saveProgDestSelect" class="prog-select"></select>
+                </div>
+                <div class="save-prog-buttons">
+                    <button class="settings-btn secondary" onclick="hideSaveProgDialog()">Annulla</button>
+                    <button class="settings-btn primary" onclick="confirmSaveProg()">Salva</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Help dialog -->
+        <div id="helpOverlay" class="help-overlay" onclick="hideHelp()">
+            <div class="help-box" onclick="event.stopPropagation()">
+                <div class="help-close" onclick="hideHelp()">&times;</div>
+                <div id="helpContent"></div>
+            </div>
+        </div>
+
+        <!-- Settings dialog -->
+        <div id="settingsOverlay" class="settings-overlay" onclick="hideSettings()">
+            <div class="settings-box" onclick="event.stopPropagation()">
+                <div class="settings-close" onclick="hideSettings()">&times;</div>
+                <div class="settings-title">Impostazioni Programmazione</div>
+
+                <div class="settings-columns">
+                    <!-- Colonna sinistra: Programmazione base -->
+                    <div class="settings-column">
+                        <!-- Modalità base con radio buttons -->
+                        <div class="settings-section">
+                            <div class="settings-section-title">Programmazione</div>
+                            <div class="settings-radio-group">
+                                <label class="settings-radio-label">
+                                    <input type="radio" name="scheduleMode" value="fixed" class="settings-radio" onchange="onScheduleModeChange()">
+                                    Fisso
+                                </label>
+                                <label class="settings-radio-label">
+                                    <input type="radio" name="scheduleMode" value="weekly" class="settings-radio" onchange="onScheduleModeChange()" checked>
+                                    Settimanale
+                                </label>
+                            </div>
+
+                            <!-- Griglia programmi: Fisso + giorni settimana -->
+                            <div class="settings-week-grid">
+                                <span class="settings-day-label fixed-label">Fisso</span>
+                                <select id="fixedProgram" class="settings-select"></select>
+                                <span class="settings-day-label">Lunedì</span>
+                                <select id="weekMon" class="settings-select"></select>
+                                <span class="settings-day-label">Martedì</span>
+                                <select id="weekTue" class="settings-select"></select>
+                                <span class="settings-day-label">Mercoledì</span>
+                                <select id="weekWed" class="settings-select"></select>
+                                <span class="settings-day-label">Giovedì</span>
+                                <select id="weekThu" class="settings-select"></select>
+                                <span class="settings-day-label">Venerdì</span>
+                                <select id="weekFri" class="settings-select"></select>
+                                <span class="settings-day-label">Sabato</span>
+                                <select id="weekSat" class="settings-select"></select>
+                                <span class="settings-day-label">Domenica</span>
+                                <select id="weekSun" class="settings-select"></select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Colonna destra: Override e eccezioni -->
+                    <div class="settings-column">
+                        <!-- Override oggi -->
+                        <div class="settings-section">
+                            <div class="settings-section-title">
+                                <input type="checkbox" id="overrideTodayEnabled" class="settings-checkbox">
+                                <span>Speciale per OGGI</span>
+                            </div>
+                            <div class="settings-row">
+                                <label class="settings-label">Programma:</label>
+                                <select id="overrideTodayProgram" class="settings-select"></select>
+                            </div>
+                        </div>
+
+                        <!-- Override domani -->
+                        <div class="settings-section">
+                            <div class="settings-section-title">
+                                <input type="checkbox" id="overrideTomorrowEnabled" class="settings-checkbox">
+                                <span>Speciale per DOMANI</span>
+                            </div>
+                            <div class="settings-row">
+                                <label class="settings-label">Programma:</label>
+                                <select id="overrideTomorrowProgram" class="settings-select"></select>
+                            </div>
+                        </div>
+
+                        <!-- Periodo speciale (eccezione) -->
+                        <div class="settings-section">
+                            <div class="settings-section-title">
+                                <input type="checkbox" id="exceptionEnabled" class="settings-checkbox">
+                                <span>Periodo Speciale</span>
+                            </div>
+                            <div class="settings-row">
+                                <label class="settings-label">Dal:</label>
+                                <input type="date" id="exceptionStartDate" class="settings-date" onchange="validateExceptionDates()">
+                            </div>
+                            <div class="settings-row">
+                                <label class="settings-label">Al:</label>
+                                <input type="date" id="exceptionEndDate" class="settings-date" onchange="validateExceptionDates()">
+                            </div>
+                            <div id="dateError" class="settings-error">Le date devono essere future e la fine dopo l'inizio</div>
+                            <div class="settings-row">
+                                <label class="settings-label">Programma:</label>
+                                <select id="exceptionProgram" class="settings-select"></select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pulsanti -->
+                <div class="settings-buttons">
+                    <button class="settings-btn secondary" onclick="hideSettings()">Annulla</button>
+                    <button class="settings-btn primary" onclick="saveSettings()">Salva</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -330,8 +1069,847 @@
             temp: true,
             hum: false,       // Default: disabilitata
             setpoint: true,
-            press: false      // Default: disabilitata
+            press: false,     // Default: disabilitata
+            heater: true      // Default: abilitata
         };
+
+        // ==================== SETTINGS ====================
+        // Dati caricati da config.json
+        let availablePrograms = [];
+        let savedSettings = null;  // Impostazioni salvate (da config.json)
+        let editingSettings = null;  // Copia locale per editing
+
+        // Carica config.json all'avvio
+        async function loadConfig() {
+            try {
+                const response = await fetch('/config.json');
+                if (!response.ok) throw new Error('Config not found');
+                const config = await response.json();
+
+                // Estrai programmi (con slots completi per editing)
+                if (config.schedule && config.schedule.programs) {
+                    availablePrograms = config.schedule.programs.map(p => ({
+                        id: p.id,
+                        name: p.name,
+                        slots: p.slots ? [...p.slots] : new Array(48).fill(200)
+                    }));
+                }
+
+                // Estrai impostazioni schedule
+                if (config.schedule) {
+                    savedSettings = {
+                        mode: config.schedule.mode || 'weekly',
+                        fixedProgramId: config.schedule.fixed_program || 0,
+                        weeklySchedule: {
+                            monday: config.schedule.weekly_schedule?.monday || 0,
+                            tuesday: config.schedule.weekly_schedule?.tuesday || 0,
+                            wednesday: config.schedule.weekly_schedule?.wednesday || 0,
+                            thursday: config.schedule.weekly_schedule?.thursday || 0,
+                            friday: config.schedule.weekly_schedule?.friday || 0,
+                            saturday: config.schedule.weekly_schedule?.saturday || 1,
+                            sunday: config.schedule.weekly_schedule?.sunday || 2
+                        },
+                        overrideToday: {
+                            enabled: config.schedule.override_today?.enabled || false,
+                            programId: config.schedule.override_today?.program_id || 0
+                        },
+                        overrideTomorrow: {
+                            enabled: config.schedule.override_tomorrow?.enabled || false,
+                            programId: config.schedule.override_tomorrow?.program_id || 0
+                        },
+                        exception: {
+                            enabled: config.schedule.exception?.enabled || false,
+                            startDate: config.schedule.exception?.start_date || '',
+                            endDate: config.schedule.exception?.end_date || '',
+                            programId: config.schedule.exception?.program_id || 4
+                        }
+                    };
+                }
+
+                console.log('Config caricato:', availablePrograms.length, 'programmi');
+            } catch (error) {
+                console.error('Errore caricamento config:', error);
+                // Fallback a valori default
+                availablePrograms = [
+                    { id: 0, name: 'Standard' },
+                    { id: 1, name: 'Sabato' },
+                    { id: 2, name: 'Domenica' }
+                ];
+                savedSettings = {
+                    mode: 'weekly',
+                    fixedProgramId: 0,
+                    weeklySchedule: { monday: 0, tuesday: 0, wednesday: 0, thursday: 0, friday: 0, saturday: 1, sunday: 2 },
+                    overrideToday: { enabled: false, programId: 0 },
+                    overrideTomorrow: { enabled: false, programId: 0 },
+                    exception: { enabled: false, startDate: '', endDate: '', programId: 0 }
+                };
+            }
+        }
+
+        // Crea copia locale per editing
+        function createEditingCopy() {
+            editingSettings = JSON.parse(JSON.stringify(savedSettings));
+        }
+
+        function showSettings() {
+            createEditingCopy();
+            populateProgramSelects();
+            loadSettingsToForm();
+            document.getElementById('settingsOverlay').classList.add('visible');
+        }
+
+        function hideSettings() {
+            // Scarta le modifiche (editingSettings viene ignorato)
+            editingSettings = null;
+            document.getElementById('settingsOverlay').classList.remove('visible');
+        }
+
+        // Popola tutti i select con i programmi disponibili
+        function populateProgramSelects() {
+            const selectIds = [
+                'fixedProgram', 'weekMon', 'weekTue', 'weekWed', 'weekThu', 'weekFri', 'weekSat', 'weekSun',
+                'overrideTodayProgram', 'overrideTomorrowProgram', 'exceptionProgram'
+            ];
+
+            selectIds.forEach(id => {
+                const select = document.getElementById(id);
+                if (select) {
+                    select.innerHTML = '';
+                    availablePrograms.forEach(prog => {
+                        const option = document.createElement('option');
+                        option.value = prog.id;
+                        option.textContent = prog.name;
+                        select.appendChild(option);
+                    });
+                }
+            });
+        }
+
+        // Carica i valori dalla copia locale nel form
+        function loadSettingsToForm() {
+            if (!editingSettings) return;
+
+            // Modalità (radio buttons)
+            const radios = document.querySelectorAll('input[name="scheduleMode"]');
+            radios.forEach(radio => {
+                radio.checked = (radio.value === editingSettings.mode);
+            });
+
+            // Programma fisso
+            document.getElementById('fixedProgram').value = editingSettings.fixedProgramId;
+
+            // Programmazione settimanale
+            document.getElementById('weekMon').value = editingSettings.weeklySchedule.monday;
+            document.getElementById('weekTue').value = editingSettings.weeklySchedule.tuesday;
+            document.getElementById('weekWed').value = editingSettings.weeklySchedule.wednesday;
+            document.getElementById('weekThu').value = editingSettings.weeklySchedule.thursday;
+            document.getElementById('weekFri').value = editingSettings.weeklySchedule.friday;
+            document.getElementById('weekSat').value = editingSettings.weeklySchedule.saturday;
+            document.getElementById('weekSun').value = editingSettings.weeklySchedule.sunday;
+
+            // Override oggi
+            document.getElementById('overrideTodayEnabled').checked = editingSettings.overrideToday.enabled;
+            document.getElementById('overrideTodayProgram').value = editingSettings.overrideToday.programId;
+
+            // Override domani
+            document.getElementById('overrideTomorrowEnabled').checked = editingSettings.overrideTomorrow.enabled;
+            document.getElementById('overrideTomorrowProgram').value = editingSettings.overrideTomorrow.programId;
+
+            // Eccezione periodo
+            document.getElementById('exceptionEnabled').checked = editingSettings.exception.enabled;
+            document.getElementById('exceptionStartDate').value = editingSettings.exception.startDate;
+            document.getElementById('exceptionEndDate').value = editingSettings.exception.endDate;
+            document.getElementById('exceptionProgram').value = editingSettings.exception.programId;
+
+            // Resetta errori
+            validateExceptionDates();
+        }
+
+        // Gestione cambio modalità (radio buttons)
+        function onScheduleModeChange() {
+            // Tutti i select sono sempre visibili e abilitati
+        }
+
+        // Validazione date eccezione
+        function validateExceptionDates() {
+            const startInput = document.getElementById('exceptionStartDate');
+            const endInput = document.getElementById('exceptionEndDate');
+            const errorDiv = document.getElementById('dateError');
+
+            const startDate = startInput.value;
+            const endDate = endInput.value;
+
+            // Se entrambe vuote, nessun errore
+            if (!startDate && !endDate) {
+                startInput.classList.remove('invalid');
+                endInput.classList.remove('invalid');
+                errorDiv.classList.remove('visible');
+                return true;
+            }
+
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const todayStr = today.toISOString().split('T')[0];
+
+            let hasError = false;
+
+            // Controlla data inizio >= oggi
+            if (startDate && startDate < todayStr) {
+                startInput.classList.add('invalid');
+                hasError = true;
+            } else {
+                startInput.classList.remove('invalid');
+            }
+
+            // Controlla data fine >= oggi e >= inizio
+            if (endDate) {
+                if (endDate < todayStr || (startDate && endDate < startDate)) {
+                    endInput.classList.add('invalid');
+                    hasError = true;
+                } else {
+                    endInput.classList.remove('invalid');
+                }
+            }
+
+            if (hasError) {
+                errorDiv.classList.add('visible');
+            } else {
+                errorDiv.classList.remove('visible');
+            }
+
+            return !hasError;
+        }
+
+        // Salva impostazioni
+        async function saveSettings() {
+            // Valida date prima di salvare
+            if (document.getElementById('exceptionEnabled').checked && !validateExceptionDates()) {
+                alert('Correggere le date del periodo speciale');
+                return;
+            }
+
+            // Leggi modalità da radio buttons
+            const modeRadio = document.querySelector('input[name="scheduleMode"]:checked');
+            const mode = modeRadio ? modeRadio.value : 'weekly';
+
+            // Raccogli i dati dal form
+            const newSettings = {
+                mode: mode,
+                fixedProgramId: parseInt(document.getElementById('fixedProgram').value),
+                weeklySchedule: {
+                    monday: parseInt(document.getElementById('weekMon').value),
+                    tuesday: parseInt(document.getElementById('weekTue').value),
+                    wednesday: parseInt(document.getElementById('weekWed').value),
+                    thursday: parseInt(document.getElementById('weekThu').value),
+                    friday: parseInt(document.getElementById('weekFri').value),
+                    saturday: parseInt(document.getElementById('weekSat').value),
+                    sunday: parseInt(document.getElementById('weekSun').value)
+                },
+                overrideToday: {
+                    enabled: document.getElementById('overrideTodayEnabled').checked,
+                    programId: parseInt(document.getElementById('overrideTodayProgram').value)
+                },
+                overrideTomorrow: {
+                    enabled: document.getElementById('overrideTomorrowEnabled').checked,
+                    programId: parseInt(document.getElementById('overrideTomorrowProgram').value)
+                },
+                exception: {
+                    enabled: document.getElementById('exceptionEnabled').checked,
+                    startDate: document.getElementById('exceptionStartDate').value,
+                    endDate: document.getElementById('exceptionEndDate').value,
+                    programId: parseInt(document.getElementById('exceptionProgram').value)
+                }
+            };
+
+            // Converti al formato config.json per API
+            const scheduleUpdate = {
+                mode: newSettings.mode,
+                fixed_program: newSettings.fixedProgramId,
+                weekly_schedule: newSettings.weeklySchedule,
+                override_today: {
+                    enabled: newSettings.overrideToday.enabled,
+                    program_id: newSettings.overrideToday.programId
+                },
+                override_tomorrow: {
+                    enabled: newSettings.overrideTomorrow.enabled,
+                    program_id: newSettings.overrideTomorrow.programId
+                },
+                exception: {
+                    enabled: newSettings.exception.enabled,
+                    start_date: newSettings.exception.startDate,
+                    end_date: newSettings.exception.endDate,
+                    program_id: newSettings.exception.programId
+                }
+            };
+
+            console.log('Salvataggio impostazioni:', scheduleUpdate);
+
+            try {
+                const response = await fetch('/api/schedule', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(scheduleUpdate)
+                });
+
+                if (!response.ok) {
+                    throw new Error('Errore salvataggio: ' + response.status);
+                }
+
+                // Aggiorna savedSettings con i nuovi valori
+                savedSettings = newSettings;
+                editingSettings = null;
+                hideSettings();
+
+                console.log('Impostazioni salvate con successo');
+            } catch (error) {
+                console.error('Errore salvataggio:', error);
+                alert('Errore durante il salvataggio: ' + error.message);
+            }
+        }
+        // ==================== END SETTINGS ====================
+
+        // ==================== PROGRAM NAME ====================
+        // Determina il programma attivo in base alla configurazione e data corrente
+        function getActiveProgramInfo(year, month, day, wday) {
+            if (!savedSettings || !availablePrograms.length) {
+                return { name: '--', source: 'none' };
+            }
+
+            // Formatta data corrente come YYYY-MM-DD per confronti
+            const todayStr = year + '-' +
+                String(month).padStart(2, '0') + '-' +
+                String(day).padStart(2, '0');
+
+            // 1. Controlla override_today
+            if (savedSettings.overrideToday && savedSettings.overrideToday.enabled) {
+                const prog = availablePrograms.find(p => p.id === savedSettings.overrideToday.programId);
+                if (prog) {
+                    return { name: prog.name, source: 'override_today' };
+                }
+            }
+
+            // 2. Controlla exception period (vacanze/periodo speciale)
+            if (savedSettings.exception && savedSettings.exception.enabled) {
+                const startDate = savedSettings.exception.startDate;
+                const endDate = savedSettings.exception.endDate;
+                if (startDate && endDate && todayStr >= startDate && todayStr <= endDate) {
+                    const prog = availablePrograms.find(p => p.id === savedSettings.exception.programId);
+                    if (prog) {
+                        return { name: prog.name, source: 'exception' };
+                    }
+                }
+            }
+
+            // 3. In base alla modalità: fixed o weekly
+            if (savedSettings.mode === 'fixed') {
+                const prog = availablePrograms.find(p => p.id === savedSettings.fixedProgramId);
+                if (prog) {
+                    return { name: prog.name, source: 'fixed' };
+                }
+            } else {
+                // Modalità weekly - wday: 0=domenica, 1=lunedì, ... 6=sabato
+                const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+                const dayKey = dayNames[wday];
+                const programId = savedSettings.weeklySchedule[dayKey];
+                const prog = availablePrograms.find(p => p.id === programId);
+                if (prog) {
+                    return { name: prog.name, source: 'weekly' };
+                }
+            }
+
+            return { name: '--', source: 'none' };
+        }
+
+        // Aggiorna visualizzazione nome programma
+        function updateProgramNameDisplay(year, month, day, wday) {
+            const info = getActiveProgramInfo(year, month, day, wday);
+            const el = document.getElementById('currentProgram');
+            if (el) {
+                let displayText = 'Prog: ' + info.name;
+                // Aggiungi indicatore se override o eccezione
+                if (info.source === 'override_today') {
+                    displayText += ' (oggi)';
+                } else if (info.source === 'exception') {
+                    displayText += ' (speciale)';
+                }
+                el.textContent = displayText;
+            }
+        }
+        // ==================== END PROGRAM NAME ====================
+
+        // ==================== PROGRAMMING MODE ====================
+        let isProgMode = false;
+        let progResolution = 30;  // Risoluzione attuale: 30, 60, 1440 minuti
+
+        // Dati programma per editing
+        let originalProgramSlots = null;  // 48 slot del programma modello (curva nera)
+        let editingProgramSlots = null;   // 48 slot in editing (curva verde)
+
+        // Stato drag
+        let isDragging = false;
+        let dragSlotIndex = -1;
+        let dragStartY = 0;
+        let dragStartValue = 0;
+
+        // Entra in modalità programmazione
+        function enterProgMode() {
+            isProgMode = true;
+
+            // Nascondi controlli normali e selettori data
+            document.getElementById('normalControls').style.display = 'none';
+            document.getElementById('dayButtons').style.display = 'none';
+            document.getElementById('calendarContainer').style.display = 'none';
+
+            // Mostra controlli programmazione
+            document.getElementById('progControls').style.display = 'flex';
+
+            // Popola i select con i programmi disponibili
+            populateProgSelects();
+
+            // Carica il programma modello selezionato
+            loadModelProgram();
+
+            // Aggiungi listener per cambio modello
+            document.getElementById('progModello').addEventListener('change', loadModelProgram);
+
+            console.log('Modalità programmazione attivata');
+        }
+
+        // Carica il programma modello e crea copia per editing
+        function loadModelProgram() {
+            const modelId = parseInt(document.getElementById('progModello').value);
+            const program = availablePrograms.find(p => p.id === modelId);
+
+            if (program && program.slots) {
+                // Copia originale (per curva nera)
+                originalProgramSlots = [...program.slots];
+                // Copia per editing (per curva verde)
+                editingProgramSlots = [...program.slots];
+
+                console.log('Programma modello caricato:', program.name, '- 48 slot');
+
+                // Aggiorna il grafico con le due curve
+                updateProgChart();
+            }
+        }
+
+        // Esci dalla modalità programmazione
+        function exitProgMode() {
+            isProgMode = false;
+
+            // Rimuovi listener cambio modello
+            document.getElementById('progModello').removeEventListener('change', loadModelProgram);
+
+            // Rimuovi curva editing dal grafico
+            removeProgChart();
+
+            // Pulisci dati programma
+            originalProgramSlots = null;
+            editingProgramSlots = null;
+
+            // Mostra controlli normali e selettori data
+            document.getElementById('normalControls').style.display = 'flex';
+            document.getElementById('dayButtons').style.display = 'flex';
+            document.getElementById('calendarContainer').style.display = 'inline-block';
+
+            // Nascondi controlli programmazione
+            document.getElementById('progControls').style.display = 'none';
+
+            console.log('Modalità programmazione disattivata');
+        }
+
+        // Imposta risoluzione temporale
+        function setProgResolution(minutes) {
+            progResolution = minutes;
+
+            // Aggiorna stato pulsanti
+            document.querySelectorAll('.prog-time-btn').forEach(btn => {
+                if (parseInt(btn.dataset.resolution) === minutes) {
+                    btn.classList.add('selected');
+                } else {
+                    btn.classList.remove('selected');
+                }
+            });
+
+            console.log('Risoluzione impostata:', minutes, 'minuti');
+        }
+
+        // Popola i select Modello e Destinazione
+        function populateProgSelects() {
+            const selects = ['progModello', 'progDestinazione', 'saveProgDestSelect'];
+
+            selects.forEach(id => {
+                const select = document.getElementById(id);
+                if (select) {
+                    select.innerHTML = '';
+                    availablePrograms.forEach(prog => {
+                        const option = document.createElement('option');
+                        option.value = prog.id;
+                        option.textContent = prog.name;
+                        select.appendChild(option);
+                    });
+                }
+            });
+
+            // Preseleziona il programma attualmente attivo (se disponibile)
+            const activeInfo = getActiveProgramInfo(
+                new Date().getFullYear(),
+                new Date().getMonth() + 1,
+                new Date().getDate(),
+                new Date().getDay()
+            );
+            const activeProg = availablePrograms.find(p => p.name === activeInfo.name);
+            if (activeProg) {
+                document.getElementById('progModello').value = activeProg.id;
+                document.getElementById('progDestinazione').value = activeProg.id;
+            }
+        }
+
+        // Mostra dialog conferma salvataggio
+        function showSaveProgDialog() {
+            // Sincronizza il select della dialog con la destinazione selezionata
+            const destValue = document.getElementById('progDestinazione').value;
+            document.getElementById('saveProgDestSelect').value = destValue;
+
+            document.getElementById('saveProgOverlay').classList.add('visible');
+        }
+
+        // Nascondi dialog conferma salvataggio
+        function hideSaveProgDialog() {
+            document.getElementById('saveProgOverlay').classList.remove('visible');
+        }
+
+        // Conferma salvataggio programma
+        function confirmSaveProg() {
+            const destId = parseInt(document.getElementById('saveProgDestSelect').value);
+            const destName = availablePrograms.find(p => p.id === destId)?.name || 'Unknown';
+
+            console.log('Salvataggio programma confermato:', destId, destName);
+
+            // Salva il programma editato nella destinazione
+            saveProgramToDestination(destId);
+
+            hideSaveProgDialog();
+            exitProgMode();
+        }
+
+        // Salva il programma editato nella destinazione
+        async function saveProgramToDestination(destId) {
+            if (!editingProgramSlots) return;
+
+            // Aggiorna localmente
+            const destProgram = availablePrograms.find(p => p.id === destId);
+            if (destProgram) {
+                destProgram.slots = [...editingProgramSlots];
+            }
+
+            // Invia al server
+            try {
+                const response = await fetch('/api/program/' + destId, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ slots: editingProgramSlots })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Errore salvataggio: ' + response.status);
+                }
+
+                console.log('Programma salvato con successo:', destId);
+            } catch (error) {
+                console.error('Errore salvataggio programma:', error);
+                alert('Errore durante il salvataggio: ' + error.message);
+            }
+        }
+
+        // Aggiorna il grafico per mostrare il programma modello (nero) e editing (verde)
+        function updateProgChart() {
+            if (!originalProgramSlots || !editingProgramSlots || !uplot) return;
+
+            // Genera i dati basandosi sui timestamps esistenti
+            const timestamps = uplot.data[0];
+            const originalSetpoints = [];  // Curva nera (modello)
+            const editingSetpoints = [];   // Curva verde (editing)
+
+            // Calcola dayStart dal primo timestamp
+            const firstTs = timestamps[0];
+            const dataDate = new Date(firstTs * 1000);
+            dataDate.setHours(0, 0, 0, 0);
+            const dayStart = dataDate.getTime() / 1000;
+
+            // Per ogni timestamp, calcola i setpoint da entrambi i programmi
+            for (let i = 0; i < timestamps.length; i++) {
+                const ts = timestamps[i];
+                const secondsFromMidnight = ts - dayStart;
+                if (secondsFromMidnight >= 0 && secondsFromMidnight < 86400) {
+                    const slot = Math.floor(secondsFromMidnight / 1800);
+                    if (slot >= 0 && slot < 48) {
+                        originalSetpoints.push(originalProgramSlots[slot] / 10.0);
+                        editingSetpoints.push(editingProgramSlots[slot] / 10.0);
+                    } else {
+                        originalSetpoints.push(null);
+                        editingSetpoints.push(null);
+                    }
+                } else {
+                    originalSetpoints.push(null);
+                    editingSetpoints.push(null);
+                }
+            }
+
+            // Aggiungi la serie editing se non esiste già
+            if (uplot.series.length === 6) {
+                // Aggiungi nuova serie (indice 6)
+                uplot.addSeries({
+                    label: "Editing",
+                    stroke: "#4caf50",
+                    width: 3,
+                    scale: 'y',
+                    show: true
+                }, 6);
+            }
+
+            // Aggiorna i dati:
+            // - indice 4 = setpoint originale (nero) -> ora mostra il programma modello
+            // - indice 6 = setpoint editing (verde)
+            const newData = [...uplot.data];
+            newData[4] = originalSetpoints;  // Aggiorna curva nera con programma modello
+            if (newData.length === 6) {
+                newData.push(editingSetpoints);
+            } else {
+                newData[6] = editingSetpoints;
+            }
+            uplot.setData(newData);
+
+            // Setup drag handlers (solo la prima volta)
+            setupProgDragHandlers();
+
+            console.log('Grafico programmazione aggiornato');
+        }
+
+        // Rimuove la serie editing e ripristina il setpoint originale
+        function removeProgChart() {
+            if (!uplot) return;
+
+            // Ripristina la curva nera con il programma attivo
+            const timestamps = uplot.data[0];
+            const activeSetpoints = [];
+
+            // Calcola dayStart dal primo timestamp
+            const firstTs = timestamps[0];
+            const dataDate = new Date(firstTs * 1000);
+            dataDate.setHours(0, 0, 0, 0);
+            const dayStart = dataDate.getTime() / 1000;
+
+            // Usa programSlots (il programma attivo) per ripristinare
+            for (let i = 0; i < timestamps.length; i++) {
+                const ts = timestamps[i];
+                const secondsFromMidnight = ts - dayStart;
+                if (programSlots && secondsFromMidnight >= 0 && secondsFromMidnight < 86400) {
+                    const slot = Math.floor(secondsFromMidnight / 1800);
+                    if (slot >= 0 && slot < 48) {
+                        activeSetpoints.push(programSlots[slot] / 10.0);
+                    } else {
+                        activeSetpoints.push(null);
+                    }
+                } else {
+                    activeSetpoints.push(null);
+                }
+            }
+
+            // Rimuovi la serie editing se esiste
+            if (uplot.series.length > 6) {
+                uplot.delSeries(6);
+            }
+
+            // Ripristina i dati: curva nera torna al programma attivo
+            const newData = uplot.data.slice(0, 6);
+            newData[4] = activeSetpoints;  // Ripristina setpoint originale
+            uplot.setData(newData);
+
+            // Rimuovi drag handlers
+            removeProgDragHandlers();
+
+            console.log('Curva editing rimossa, setpoint ripristinato');
+        }
+
+        // Setup handler per drag sulla curva verde
+        function setupProgDragHandlers() {
+            if (!uplot) return;
+
+            const plot = uplot.root.querySelector('.u-over');
+            if (!plot) return;
+
+            // Salva il cursore originale
+            plot.dataset.originalCursor = plot.style.cursor || 'default';
+            plot.style.cursor = 'crosshair';
+
+            plot.addEventListener('mousedown', onProgMouseDown);
+            plot.addEventListener('mousemove', onProgMouseMove);
+            plot.addEventListener('mouseup', onProgMouseUp);
+            plot.addEventListener('mouseleave', onProgMouseUp);
+        }
+
+        // Rimuove gli handler per drag
+        function removeProgDragHandlers() {
+            if (!uplot) return;
+
+            const plot = uplot.root.querySelector('.u-over');
+            if (!plot) return;
+
+            // Ripristina il cursore originale
+            plot.style.cursor = plot.dataset.originalCursor || 'default';
+
+            plot.removeEventListener('mousedown', onProgMouseDown);
+            plot.removeEventListener('mousemove', onProgMouseMove);
+            plot.removeEventListener('mouseup', onProgMouseUp);
+            plot.removeEventListener('mouseleave', onProgMouseUp);
+        }
+
+        function onProgMouseDown(e) {
+            if (!isProgMode || !uplot || !editingProgramSlots) return;
+
+            const rect = uplot.root.querySelector('.u-over').getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            // Converti coordinate pixel in valori
+            const xVal = uplot.posToVal(x, 'x');
+            const yVal = uplot.posToVal(y, 'y');
+
+            // Calcola dayStart dal primo timestamp
+            const firstTs = uplot.data[0][0];
+            const dataDate = new Date(firstTs * 1000);
+            dataDate.setHours(0, 0, 0, 0);
+            const dayStart = dataDate.getTime() / 1000;
+
+            // Trova lo slot corrispondente
+            const secondsFromMidnight = xVal - dayStart;
+            if (secondsFromMidnight < 0 || secondsFromMidnight >= 86400) return;
+
+            const slotIndex = Math.floor(secondsFromMidnight / 1800);  // 1800 sec = 30 min
+            if (slotIndex < 0 || slotIndex >= 48) return;
+
+            // Verifica se il click è vicino alla curva verde (+/- tolleranza)
+            const editingValue = editingProgramSlots[slotIndex] / 10.0;
+            const tolerance = 0.5;  // Tolleranza aumentata per facilità d'uso
+
+            if (Math.abs(yVal - editingValue) <= tolerance) {
+                isDragging = true;
+                dragSlotIndex = slotIndex;
+                dragStartY = y;
+                dragStartValue = editingValue;
+
+                // Mostra tooltip
+                showDragTooltip(e.clientX, e.clientY, editingValue);
+
+                e.preventDefault();  // Previeni selezione testo
+                console.log('Drag iniziato slot:', slotIndex, 'valore:', editingValue);
+            }
+        }
+
+        function onProgMouseMove(e) {
+            if (!isDragging || !uplot || !editingProgramSlots) return;
+
+            const rect = uplot.root.querySelector('.u-over').getBoundingClientRect();
+            const y = e.clientY - rect.top;
+
+            // Calcola nuovo valore basato sullo spostamento Y
+            const yVal = uplot.posToVal(y, 'y');
+
+            // Limita il valore tra 5 e 30°C
+            const newValue = Math.max(5, Math.min(30, yVal));
+            const newValueRounded = Math.round(newValue * 10) / 10;  // Arrotonda a 0.1°C
+
+            // Determina quali slot modificare in base alla risoluzione
+            const slotsToModify = getSlotsToModify(dragSlotIndex);
+
+            // Aggiorna tutti gli slot interessati
+            slotsToModify.forEach(slot => {
+                editingProgramSlots[slot] = Math.round(newValueRounded * 10);
+            });
+
+            // Aggiorna tooltip
+            showDragTooltip(e.clientX, e.clientY, newValueRounded);
+
+            // Aggiorna curva verde nel grafico
+            updateEditingCurve();
+
+            e.preventDefault();  // Previeni selezione testo
+        }
+
+        function onProgMouseUp(e) {
+            if (isDragging) {
+                isDragging = false;
+                dragSlotIndex = -1;
+                hideDragTooltip();
+                console.log('Drag terminato');
+            }
+        }
+
+        // Determina quali slot modificare in base alla risoluzione
+        function getSlotsToModify(baseSlot) {
+            if (progResolution === 1440) {
+                // 24h: tutti i 48 slot
+                return Array.from({length: 48}, (_, i) => i);
+            } else if (progResolution === 60) {
+                // 1h: 2 slot consecutivi allineati all'ora
+                const hourSlot = Math.floor(baseSlot / 2) * 2;  // Allinea all'ora
+                return [hourSlot, hourSlot + 1].filter(s => s < 48);
+            } else {
+                // 30min: solo lo slot corrente
+                return [baseSlot];
+            }
+        }
+
+        // Aggiorna solo la curva verde (editing) nel grafico
+        function updateEditingCurve() {
+            if (!uplot || !editingProgramSlots) return;
+
+            // Calcola dayStart dal primo timestamp
+            const timestamps = uplot.data[0];
+            const firstTs = timestamps[0];
+            const dataDate = new Date(firstTs * 1000);
+            dataDate.setHours(0, 0, 0, 0);
+            const dayStart = dataDate.getTime() / 1000;
+
+            // Ricostruisci i dati della curva editing per ogni timestamp
+            const editingSetpoints = [];
+            for (let i = 0; i < timestamps.length; i++) {
+                const ts = timestamps[i];
+                const secondsFromMidnight = ts - dayStart;
+                if (secondsFromMidnight >= 0 && secondsFromMidnight < 86400) {
+                    const slot = Math.floor(secondsFromMidnight / 1800);
+                    if (slot >= 0 && slot < 48) {
+                        editingSetpoints.push(editingProgramSlots[slot] / 10.0);
+                    } else {
+                        editingSetpoints.push(null);
+                    }
+                } else {
+                    editingSetpoints.push(null);
+                }
+            }
+
+            // Aggiorna la serie editing (indice 6)
+            const newData = [...uplot.data];
+            newData[6] = editingSetpoints;
+            uplot.setData(newData);
+        }
+
+        // Mostra tooltip con valore durante drag
+        function showDragTooltip(x, y, value) {
+            const tooltip = document.getElementById('dragTooltip');
+            tooltip.textContent = value.toFixed(1) + '°C';
+            tooltip.style.left = (x + 15) + 'px';
+            tooltip.style.top = (y - 25) + 'px';
+            tooltip.classList.add('visible');
+        }
+
+        // Nascondi tooltip
+        function hideDragTooltip() {
+            document.getElementById('dragTooltip').classList.remove('visible');
+        }
+
+        // ==================== END PROGRAMMING MODE ====================
 
         // Toggle visibilità serie nel grafico
         function toggleSeries(seriesName) {
@@ -352,6 +1930,7 @@
                 // Mappa nome serie -> indice uPlot
                 // Ordine: 0=X, 1=heater, 2=temp, 3=hum, 4=setpoint, 5=press
                 const seriesIndex = {
+                    heater: 1,
                     temp: 2,
                     hum: 3,
                     setpoint: 4,
@@ -369,16 +1948,67 @@
         const mesi = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno',
                       'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
 
-        // Carica programma setpoint (48 slot da 30 min)
+        // Carica il programma attivo basato sulle impostazioni schedule
         async function loadProgram() {
             try {
-                const response = await fetch('/api/program');
-                if (!response.ok) return;
-                const data = await response.json();
-                programSlots = data.slots;
-                console.log('Programma caricato:', programSlots.length, 'slot');
+                // Determina quale programma caricare in base alle impostazioni
+                const activeProgramId = getActiveProgramId();
+
+                // Cerca il programma negli availablePrograms (già caricati da config)
+                const program = availablePrograms.find(p => p.id === activeProgramId);
+                if (program && program.slots) {
+                    programSlots = [...program.slots];
+                    console.log('Programma attivo caricato:', program.name, '- ID:', activeProgramId);
+                } else {
+                    // Fallback: carica da API
+                    const response = await fetch('/api/program');
+                    if (!response.ok) return;
+                    const data = await response.json();
+                    programSlots = data.slots;
+                    console.log('Programma caricato da API:', programSlots.length, 'slot');
+                }
             } catch (error) {
                 console.error('Errore caricamento programma:', error);
+            }
+        }
+
+        // Determina l'ID del programma attivo basato sulle impostazioni
+        function getActiveProgramId() {
+            if (!savedSettings) return 0;
+
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = now.getMonth() + 1;
+            const day = now.getDate();
+            const wday = now.getDay();  // 0=domenica
+
+            // Formatta data corrente come YYYY-MM-DD
+            const todayStr = year + '-' +
+                String(month).padStart(2, '0') + '-' +
+                String(day).padStart(2, '0');
+
+            // 1. Controlla override_today
+            if (savedSettings.overrideToday && savedSettings.overrideToday.enabled) {
+                return savedSettings.overrideToday.programId;
+            }
+
+            // 2. Controlla exception period
+            if (savedSettings.exception && savedSettings.exception.enabled) {
+                const startDate = savedSettings.exception.startDate;
+                const endDate = savedSettings.exception.endDate;
+                if (startDate && endDate && todayStr >= startDate && todayStr <= endDate) {
+                    return savedSettings.exception.programId;
+                }
+            }
+
+            // 3. In base alla modalità: fixed o weekly
+            if (savedSettings.mode === 'fixed') {
+                return savedSettings.fixedProgramId;
+            } else {
+                // Modalità weekly
+                const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+                const dayKey = dayNames[wday];
+                return savedSettings.weeklySchedule[dayKey] || 0;
             }
         }
 
@@ -451,6 +2081,9 @@
                         await loadChartData();
                     }
                     lastMinute = data.min;
+
+                    // Aggiorna nome programma attivo
+                    updateProgramNameDisplay(data.year, data.month, data.day, data.wday);
                 }
 
                 // Aggiorna valori header
@@ -459,7 +2092,7 @@
                 document.getElementById('currentHum').textContent =
                     data.hum !== null ? data.hum + '%' : '--%';
                 document.getElementById('currentPress').textContent =
-                    data.press !== null ? data.press + ' hPa' : '---- hPa';
+                    data.press !== null ? data.press.toFixed(1) + ' hPa' : '----.- hPa';
                 document.getElementById('currentSetpoint').textContent =
                     data.setpoint !== null ? data.setpoint.toFixed(1) + '°C' : '--.-°C';
 
@@ -588,9 +2221,202 @@
             }
         }
 
+        // Carica lista date disponibili
+        async function loadAvailableDates() {
+            try {
+                const response = await fetch('/api/log/list');
+                if (!response.ok) return;
+
+                const dates = await response.json();
+                availableDates = new Set(dates);
+            } catch (error) {
+                console.error('Errore caricamento lista date:', error);
+            }
+        }
+
+        // Calendario popup
+        let calendarYear = new Date().getFullYear();
+        let calendarMonth = new Date().getMonth();  // 0-based
+        let selectedDateStr = null;  // Data selezionata nel calendario (YYYYMMDD) o null per oggi
+
+        const mesiCalendario = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno',
+                                'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
+
+        function toggleCalendar() {
+            const popup = document.getElementById('calendarPopup');
+            if (popup.classList.contains('visible')) {
+                popup.classList.remove('visible');
+            } else {
+                renderCalendar();
+                popup.classList.add('visible');
+            }
+        }
+
+        function hideCalendar() {
+            document.getElementById('calendarPopup').classList.remove('visible');
+        }
+
+        function changeMonth(delta) {
+            calendarMonth += delta;
+            if (calendarMonth < 0) {
+                calendarMonth = 11;
+                calendarYear--;
+            } else if (calendarMonth > 11) {
+                calendarMonth = 0;
+                calendarYear++;
+            }
+            renderCalendar();
+        }
+
+        function renderCalendar() {
+            document.getElementById('calendarTitle').textContent = mesiCalendario[calendarMonth] + ' ' + calendarYear;
+
+            const container = document.getElementById('calendarDays');
+            container.innerHTML = '';
+
+            // Primo giorno del mese (0=Dom, 1=Lun, ...)
+            const firstDay = new Date(calendarYear, calendarMonth, 1).getDay();
+            // Converti a settimana italiana (0=Lun, 6=Dom)
+            const startOffset = firstDay === 0 ? 6 : firstDay - 1;
+
+            // Giorni nel mese
+            const daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate();
+
+            // Oggi
+            const today = new Date();
+            const todayStr = formatDateStr(today.getFullYear(), today.getMonth() + 1, today.getDate());
+
+            // Aggiungi giorni vuoti per allineare
+            for (let i = 0; i < startOffset; i++) {
+                const btn = document.createElement('button');
+                btn.className = 'calendar-day other-month';
+                btn.textContent = '';
+                btn.disabled = true;
+                container.appendChild(btn);
+            }
+
+            // Aggiungi giorni del mese
+            for (let day = 1; day <= daysInMonth; day++) {
+                const dateStr = formatDateStr(calendarYear, calendarMonth + 1, day);
+                const btn = document.createElement('button');
+                btn.className = 'calendar-day';
+                btn.textContent = day;
+
+                const isToday = dateStr === todayStr;
+                const isAvailable = availableDates.has(dateStr);
+                const isSelected = dateStr === selectedDateStr || (isToday && selectedDateStr === null);
+
+                if (isToday) {
+                    btn.classList.add('today');
+                } else if (isAvailable) {
+                    btn.classList.add('available');
+                }
+
+                if (isSelected) {
+                    btn.classList.add('selected');
+                }
+
+                // Click handler solo per oggi o date disponibili
+                if (isToday || isAvailable) {
+                    btn.onclick = () => selectCalendarDate(dateStr, isToday);
+                }
+
+                container.appendChild(btn);
+            }
+        }
+
+        function formatDateStr(year, month, day) {
+            return String(year) + String(month).padStart(2, '0') + String(day).padStart(2, '0');
+        }
+
+        async function selectCalendarDate(dateStr, isToday) {
+            selectedDateStr = isToday ? null : dateStr;
+            hideCalendar();
+
+            // Aggiorna testo pulsante calendario
+            updateCalendarButtonText(dateStr, isToday);
+
+            // Sincronizza pulsanti giorni
+            syncDayButtonsWithDate(dateStr);
+
+            if (isToday) {
+                await loadTodayData();
+            } else {
+                await loadHistoricalData(dateStr);
+            }
+        }
+
+        // Aggiorna il testo del pulsante calendario con la data selezionata
+        function updateCalendarButtonText(dateStr, isToday) {
+            const btn = document.getElementById('calendarBtn');
+            if (isToday || !dateStr) {
+                btn.textContent = 'Oggi';
+            } else {
+                // Formatta come DD/MM
+                const day = dateStr.substring(6, 8);
+                const month = dateStr.substring(4, 6);
+                btn.textContent = day + '/' + month;
+            }
+        }
+
+        // Sincronizza lo stato dei pulsanti quando si seleziona una data
+        function syncDayButtonsWithDate(dateStr) {
+            const buttons = document.querySelectorAll('.day-btn');
+            buttons.forEach(btn => btn.classList.remove('selected'));
+
+            // Cerca il pulsante con la data corrispondente
+            const matchingBtn = document.querySelector(`.day-btn[data-date="${dateStr}"]`);
+            if (matchingBtn) {
+                matchingBtn.classList.add('selected');
+            }
+        }
+
+        // Chiudi calendario cliccando fuori
+        document.addEventListener('click', function(e) {
+            const container = document.querySelector('.calendar-container');
+            if (container && !container.contains(e.target)) {
+                hideCalendar();
+            }
+        });
+
+        // Carica un file storico per data
+        async function loadHistoricalData(dateStr) {
+            const loading = document.getElementById('loading');
+            const errorDiv = document.getElementById('error-message');
+
+            loading.style.display = 'block';
+            errorDiv.style.display = 'none';
+
+            try {
+                const response = await fetch('/api/log/raw?date=' + dateStr);
+                if (!response.ok) throw new Error('File storico non trovato');
+
+                const arrayBuffer = await response.arrayBuffer();
+                const parsedData = parseBinaryLog(arrayBuffer);
+
+                if (parsedData.timestamps.length === 0) throw new Error('Nessun dato nel file');
+
+                chartData = parsedData;
+                isViewingToday = false;  // Non usa programma attuale, usa setpoint dal log
+                renderChart(parsedData);
+                updateHeaterOnTimeDisplay();
+                loading.style.display = 'none';
+
+            } catch (error) {
+                loading.style.display = 'none';
+                errorDiv.textContent = error.message;
+                errorDiv.style.display = 'block';
+            }
+        }
+
         // Parser binario (formato 12 byte con pressione)
         function parseBinaryLog(buffer) {
             const view = new DataView(buffer);
+
+            // Leggi header: magic(4) + version(1) + year(2) + month(1) + day(1) + num_samples(2) + reserved(1)
+            const year = view.getUint16(5, true);
+            const month = view.getUint8(7);
+            const day = view.getUint8(8);
             const numSamples = view.getUint16(9, true);
 
             const timestamps = [];
@@ -601,9 +2427,10 @@
             const heaters = [];
 
             let offset = 12;
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const baseTimestamp = today.getTime() / 1000;
+            // Usa la data dall'header del file
+            const fileDate = new Date(year, month - 1, day);
+            fileDate.setHours(0, 0, 0, 0);
+            const baseTimestamp = fileDate.getTime() / 1000;
 
             for (let i = 0; i < numSamples; i++) {
                 if (offset + 12 > buffer.byteLength) break;
@@ -619,7 +2446,7 @@
                 temps.push(tempRaw === -32768 ? null : tempRaw / 100.0);
                 hums.push(humRaw === 255 ? null : humRaw);
                 setpoints.push(setpointRaw === -32768 ? null : setpointRaw / 100.0);
-                pressures.push(pressRaw === 0 ? null : pressRaw);
+                pressures.push(pressRaw === 0 ? null : pressRaw / 10.0);  // Decimi di hPa -> hPa
                 heaters.push((flags & 0x01) ? 1 : 0);  // Bit 0 = relay_on
                 offset += 12;
             }
@@ -659,15 +2486,23 @@
             // Calcola altezza disponibile: viewport - header - controlli - margini
             const header = document.querySelector('.header');
             const controls = document.querySelector('.controls');
-            const help = document.querySelector('.commands-help');
-            const usedHeight = header.offsetHeight + controls.offsetHeight + help.offsetHeight + 50;
+            const usedHeight = header.offsetHeight + controls.offsetHeight + 40;
             const height = window.innerHeight - usedHeight;
 
-            // Calcola timestamp mezzanotte di oggi (inizio e fine giornata)
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const dayStart = today.getTime() / 1000;
-            const dayEnd = dayStart + 24 * 60 * 60;  // +24 ore
+            // Calcola timestamp mezzanotte dalla data dei dati (inizio e fine giornata)
+            // Usa il primo timestamp disponibile per determinare il giorno
+            let dayStart, dayEnd;
+            if (data.timestamps.length > 0) {
+                const firstTs = data.timestamps[0];
+                const dataDate = new Date(firstTs * 1000);
+                dataDate.setHours(0, 0, 0, 0);
+                dayStart = dataDate.getTime() / 1000;
+            } else {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                dayStart = today.getTime() / 1000;
+            }
+            dayEnd = dayStart + 24 * 60 * 60;  // +24 ore
 
             const opts = {
                 width: width,
@@ -684,7 +2519,7 @@
                     },
                     y: { range: [10, 32] },
                     y2: { range: [0, 100] },
-                    y3: { range: [980, 1040] },
+                    y3: { range: [970, 1020] },
                     y4: { range: [0, 1] }  // Scala per caldaia (0=off, 1=on)
                 },
                 axes: [
@@ -727,6 +2562,7 @@
                         width: 1,
                         scale: 'y4',
                         fill: "rgba(229, 57, 53, 0.15)",
+                        show: seriesVisible.heater,
                         paths: (u, seriesIdx, idx0, idx1) => {
                             const xdata = u.data[0];
                             const ydata = u.data[seriesIdx];
@@ -762,14 +2598,16 @@
                         stroke: "#ff6384",
                         width: 2,
                         scale: 'y',
-                        show: seriesVisible.temp
+                        show: seriesVisible.temp,
+                        spanGaps: true
                     },
                     {
                         label: "Umidità",
                         stroke: "#36a2eb",
                         width: 2,
                         scale: 'y2',
-                        show: seriesVisible.hum
+                        show: seriesVisible.hum,
+                        spanGaps: true
                     },
                     {
                         label: "Setpoint",
@@ -783,7 +2621,8 @@
                         stroke: "#9966ff",
                         width: 2,
                         scale: 'y3',
-                        show: seriesVisible.press
+                        show: seriesVisible.press,
+                        spanGaps: true
                     }
                 ],
                 plugins: [
@@ -841,61 +2680,81 @@
                             document.getElementById('leg-time').textContent = timeStr;
                             document.getElementById('leg-temp').textContent = temp !== null ? temp.toFixed(1) + '°C' : '--.-°C';
                             document.getElementById('leg-hum').textContent = hum !== null ? hum + '%' : '--%';
-                            document.getElementById('leg-press').textContent = press !== null ? press + ' hPa' : '---- hPa';
+                            document.getElementById('leg-press').textContent = press !== null ? press.toFixed(1) + ' hPa' : '----.- hPa';
                             document.getElementById('leg-set').textContent = setp !== null ? setp.toFixed(1) + '°C' : '--.-°C';
                         }
                     },
                     init: (u) => {
                         const plot = u.root.querySelector('.u-over');
+                        const wrap = u.root;
 
-                        // === TOUCH: 1 dito = hover, 2 dita = pinch zoom + pan ===
+                        // === TOUCH: 1 dito = pan X+Y, 1 dito su asse X = cursore, 2 dita = pinch zoom ===
+                        let touchStartX = null;
+                        let touchStartY = null;
+                        let touchScaleXMin = null;
+                        let touchScaleXMax = null;
+                        let touchScaleYMin = null;
+                        let touchScaleYMax = null;
+                        let touchScaleY2Min = null;
+                        let touchScaleY2Max = null;
+                        let touchScaleY3Min = null;
+                        let touchScaleY3Max = null;
+                        let isCursorMode = false;  // true se tocco è su asse X
                         let initialPinchDistanceX = null;
                         let initialPinchDistanceY = null;
                         let initialScaleX = null;
                         let initialScaleY = null;
                         let initialScaleY2 = null;
                         let initialScaleY3 = null;
-                        let lastPinchCenterX = null;
-                        let lastPinchCenterY = null;
-                        let panTouchScaleXMin = null;
-                        let panTouchScaleXMax = null;
-                        let panTouchScaleYMin = null;
-                        let panTouchScaleYMax = null;
-                        let panTouchScaleY2Min = null;
-                        let panTouchScaleY2Max = null;
-                        let panTouchScaleY3Min = null;
-                        let panTouchScaleY3Max = null;
+                        let pinchCenterX = null;
+                        let pinchCenterY = null;
+
+                        // Altezza asse X (circa 40px dal basso del grafico)
+                        const X_AXIS_HEIGHT = 40;
 
                         plot.addEventListener('touchstart', (e) => {
                             if (e.touches.length === 2) {
                                 e.preventDefault();
-                                // Pinch zoom - salva distanze iniziali
+                                // Pinch zoom - X e Y
                                 initialPinchDistanceX = Math.abs(e.touches[0].clientX - e.touches[1].clientX);
                                 initialPinchDistanceY = Math.abs(e.touches[0].clientY - e.touches[1].clientY);
                                 initialScaleX = u.scales.x.max - u.scales.x.min;
                                 initialScaleY = u.scales.y.max - u.scales.y.min;
                                 initialScaleY2 = u.scales.y2.max - u.scales.y2.min;
                                 initialScaleY3 = u.scales.y3.max - u.scales.y3.min;
-                                // Pan - salva centro iniziale
-                                lastPinchCenterX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-                                lastPinchCenterY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-                                panTouchScaleXMin = u.scales.x.min;
-                                panTouchScaleXMax = u.scales.x.max;
-                                panTouchScaleYMin = u.scales.y.min;
-                                panTouchScaleYMax = u.scales.y.max;
-                                panTouchScaleY2Min = u.scales.y2.min;
-                                panTouchScaleY2Max = u.scales.y2.max;
-                                panTouchScaleY3Min = u.scales.y3.min;
-                                panTouchScaleY3Max = u.scales.y3.max;
+                                pinchCenterX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                                pinchCenterY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
                             } else if (e.touches.length === 1) {
-                                // Hover con 1 dito - simula mousemove per cursore uPlot
                                 const touch = e.touches[0];
-                                const mouseEvent = new MouseEvent('mousemove', {
-                                    clientX: touch.clientX,
-                                    clientY: touch.clientY,
-                                    bubbles: true
-                                });
-                                plot.dispatchEvent(mouseEvent);
+                                const rect = plot.getBoundingClientRect();
+                                const touchY = touch.clientY - rect.top;
+                                const plotHeight = rect.height;
+
+                                // Se tocco nella zona bassa (asse X) -> modalità cursore
+                                if (touchY > plotHeight - X_AXIS_HEIGHT) {
+                                    isCursorMode = true;
+                                    // Simula hover per mostrare cursore
+                                    const mouseEvent = new MouseEvent('mousemove', {
+                                        clientX: touch.clientX,
+                                        clientY: touch.clientY,
+                                        bubbles: true
+                                    });
+                                    plot.dispatchEvent(mouseEvent);
+                                } else {
+                                    // Pan mode (X + Y)
+                                    isCursorMode = false;
+                                    e.preventDefault();
+                                    touchStartX = touch.clientX;
+                                    touchStartY = touch.clientY;
+                                    touchScaleXMin = u.scales.x.min;
+                                    touchScaleXMax = u.scales.x.max;
+                                    touchScaleYMin = u.scales.y.min;
+                                    touchScaleYMax = u.scales.y.max;
+                                    touchScaleY2Min = u.scales.y2.min;
+                                    touchScaleY2Max = u.scales.y2.max;
+                                    touchScaleY3Min = u.scales.y3.min;
+                                    touchScaleY3Max = u.scales.y3.max;
+                                }
                             }
                         }, { passive: false });
 
@@ -904,86 +2763,137 @@
                                 e.preventDefault();
                                 const currentDistanceX = Math.abs(e.touches[0].clientX - e.touches[1].clientX);
                                 const currentDistanceY = Math.abs(e.touches[0].clientY - e.touches[1].clientY);
-                                const currentCenterX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-                                const currentCenterY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+                                const rect = plot.getBoundingClientRect();
 
-                                // Calcola pan (spostamento del centro)
-                                const panDeltaX = currentCenterX - lastPinchCenterX;
-                                const panDeltaY = currentCenterY - lastPinchCenterY;
+                                // Zoom X
+                                if (initialPinchDistanceX > 20 && currentDistanceX > 20) {
+                                    const zoomFactorX = initialPinchDistanceX / currentDistanceX;
+                                    const newRangeX = initialScaleX * zoomFactorX;
+                                    const pinchRatioX = (pinchCenterX - rect.left) / rect.width;
+                                    const scaleMinX = u.scales.x.min;
+                                    const scaleMaxX = u.scales.x.max;
+                                    const rangeX = scaleMaxX - scaleMinX;
+                                    const pinchValX = scaleMinX + rangeX * pinchRatioX;
 
-                                // Calcola fattori zoom
-                                const zoomFactorX = (initialPinchDistanceX > 20) ? initialPinchDistanceX / currentDistanceX : 1;
-                                const zoomFactorY = (initialPinchDistanceY > 20) ? initialPinchDistanceY / currentDistanceY : 1;
-
-                                // Applica zoom + pan combinati su X
-                                const newRangeX = initialScaleX * zoomFactorX;
-                                const initialCenterX = (panTouchScaleXMin + panTouchScaleXMax) / 2;
-                                const pxPerSecX = u.bbox.width / initialScaleX;
-                                const panOffsetX = panDeltaX / pxPerSecX;
-                                const newCenterX = initialCenterX - panOffsetX;
-                                u.setScale('x', {
-                                    min: newCenterX - newRangeX / 2,
-                                    max: newCenterX + newRangeX / 2
-                                });
-
-                                // Applica zoom + pan combinati su Y
-                                const newRangeY = initialScaleY * zoomFactorY;
-                                const initialCenterY = (panTouchScaleYMin + panTouchScaleYMax) / 2;
-                                const pxPerUnitY = u.bbox.height / initialScaleY;
-                                const panOffsetY = panDeltaY / pxPerUnitY;
-                                const newCenterY = initialCenterY + panOffsetY;
-                                u.setScale('y', {
-                                    min: newCenterY - newRangeY / 2,
-                                    max: newCenterY + newRangeY / 2
-                                });
-
-                                // Applica zoom + pan combinati su Y2 (solo se umidità visibile)
-                                if (seriesVisible.hum) {
-                                    const newRangeY2 = initialScaleY2 * zoomFactorY;
-                                    const initialCenterY2 = (panTouchScaleY2Min + panTouchScaleY2Max) / 2;
-                                    const pxPerUnitY2 = u.bbox.height / initialScaleY2;
-                                    const panOffsetY2 = panDeltaY / pxPerUnitY2;
-                                    const newCenterY2 = initialCenterY2 + panOffsetY2;
-                                    u.setScale('y2', {
-                                        min: newCenterY2 - newRangeY2 / 2,
-                                        max: newCenterY2 + newRangeY2 / 2
+                                    u.setScale('x', {
+                                        min: pinchValX - newRangeX * pinchRatioX,
+                                        max: pinchValX + newRangeX * (1 - pinchRatioX)
                                     });
                                 }
 
-                                // Applica zoom + pan combinati su Y3 (solo se pressione visibile)
-                                if (seriesVisible.press) {
-                                    const newRangeY3 = initialScaleY3 * zoomFactorY;
-                                    const initialCenterY3 = (panTouchScaleY3Min + panTouchScaleY3Max) / 2;
-                                    const pxPerUnitY3 = u.bbox.height / initialScaleY3;
-                                    const panOffsetY3 = panDeltaY / pxPerUnitY3;
-                                    const newCenterY3 = initialCenterY3 + panOffsetY3;
-                                    u.setScale('y3', {
-                                        min: newCenterY3 - newRangeY3 / 2,
-                                        max: newCenterY3 + newRangeY3 / 2
-                                    });
-                                }
+                                // Zoom Y
+                                if (initialPinchDistanceY > 20 && currentDistanceY > 20) {
+                                    const zoomFactorY = initialPinchDistanceY / currentDistanceY;
+                                    const pinchRatioY = (pinchCenterY - rect.top) / rect.height;
 
+                                    // Zoom scala Y (temperatura)
+                                    const newRangeY = initialScaleY * zoomFactorY;
+                                    const scaleMinY = u.scales.y.min;
+                                    const scaleMaxY = u.scales.y.max;
+                                    const rangeY = scaleMaxY - scaleMinY;
+                                    const pinchValY = scaleMaxY - rangeY * pinchRatioY;  // Invertito (Y cresce verso l'alto)
+
+                                    u.setScale('y', {
+                                        min: pinchValY - newRangeY * (1 - pinchRatioY),
+                                        max: pinchValY + newRangeY * pinchRatioY
+                                    });
+
+                                    // Zoom scala Y2 (umidità) - solo se visibile
+                                    if (seriesVisible.hum) {
+                                        const newRangeY2 = initialScaleY2 * zoomFactorY;
+                                        const scaleMinY2 = u.scales.y2.min;
+                                        const scaleMaxY2 = u.scales.y2.max;
+                                        const rangeY2 = scaleMaxY2 - scaleMinY2;
+                                        const pinchValY2 = scaleMaxY2 - rangeY2 * pinchRatioY;
+
+                                        u.setScale('y2', {
+                                            min: pinchValY2 - newRangeY2 * (1 - pinchRatioY),
+                                            max: pinchValY2 + newRangeY2 * pinchRatioY
+                                        });
+                                    }
+
+                                    // Zoom scala Y3 (pressione) - solo se visibile
+                                    if (seriesVisible.press) {
+                                        const newRangeY3 = initialScaleY3 * zoomFactorY;
+                                        const scaleMinY3 = u.scales.y3.min;
+                                        const scaleMaxY3 = u.scales.y3.max;
+                                        const rangeY3 = scaleMaxY3 - scaleMinY3;
+                                        const pinchValY3 = scaleMaxY3 - rangeY3 * pinchRatioY;
+
+                                        u.setScale('y3', {
+                                            min: pinchValY3 - newRangeY3 * (1 - pinchRatioY),
+                                            max: pinchValY3 + newRangeY3 * pinchRatioY
+                                        });
+                                    }
+                                }
                             } else if (e.touches.length === 1) {
-                                // Hover con 1 dito
                                 const touch = e.touches[0];
-                                const mouseEvent = new MouseEvent('mousemove', {
-                                    clientX: touch.clientX,
-                                    clientY: touch.clientY,
-                                    bubbles: true
-                                });
-                                plot.dispatchEvent(mouseEvent);
+
+                                if (isCursorMode) {
+                                    // Modalità cursore - sposta la barra verticale
+                                    const mouseEvent = new MouseEvent('mousemove', {
+                                        clientX: touch.clientX,
+                                        clientY: touch.clientY,
+                                        bubbles: true
+                                    });
+                                    plot.dispatchEvent(mouseEvent);
+                                } else if (touchStartX !== null) {
+                                    // Modalità pan (X + Y)
+                                    e.preventDefault();
+                                    const deltaX = touch.clientX - touchStartX;
+                                    const deltaY = touch.clientY - touchStartY;
+
+                                    // Pan X
+                                    const pxPerSec = u.bbox.width / (touchScaleXMax - touchScaleXMin);
+                                    const secDelta = deltaX / pxPerSec;
+                                    u.setScale('x', {
+                                        min: touchScaleXMin - secDelta,
+                                        max: touchScaleXMax - secDelta
+                                    });
+
+                                    // Pan Y (temperatura)
+                                    const pxPerUnitY = u.bbox.height / (touchScaleYMax - touchScaleYMin);
+                                    const yDelta = deltaY / pxPerUnitY;
+                                    u.setScale('y', {
+                                        min: touchScaleYMin + yDelta,
+                                        max: touchScaleYMax + yDelta
+                                    });
+
+                                    // Pan Y2 (umidità) - solo se visibile
+                                    if (seriesVisible.hum) {
+                                        const pxPerUnitY2 = u.bbox.height / (touchScaleY2Max - touchScaleY2Min);
+                                        const y2Delta = deltaY / pxPerUnitY2;
+                                        u.setScale('y2', {
+                                            min: touchScaleY2Min + y2Delta,
+                                            max: touchScaleY2Max + y2Delta
+                                        });
+                                    }
+
+                                    // Pan Y3 (pressione) - solo se visibile
+                                    if (seriesVisible.press) {
+                                        const pxPerUnitY3 = u.bbox.height / (touchScaleY3Max - touchScaleY3Min);
+                                        const y3Delta = deltaY / pxPerUnitY3;
+                                        u.setScale('y3', {
+                                            min: touchScaleY3Min + y3Delta,
+                                            max: touchScaleY3Max + y3Delta
+                                        });
+                                    }
+                                }
                             }
                         }, { passive: false });
 
                         plot.addEventListener('touchend', () => {
+                            touchStartX = null;
+                            touchStartY = null;
+                            isCursorMode = false;
                             initialPinchDistanceX = null;
                             initialPinchDistanceY = null;
                             initialScaleX = null;
                             initialScaleY = null;
                             initialScaleY2 = null;
                             initialScaleY3 = null;
-                            lastPinchCenterX = null;
-                            lastPinchCenterY = null;
+                            pinchCenterX = null;
+                            pinchCenterY = null;
                         });
 
                         // === DESKTOP: pan con tasto centrale o destro (X e Y) ===
@@ -1107,16 +3017,110 @@
 
         // Reset zoom - mostra sempre 24 ore complete
         function resetZoom() {
-            if (uplot) {
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                const dayStart = today.getTime() / 1000;
+            if (uplot && chartData && chartData.timestamps.length > 0) {
+                // Usa il primo timestamp per determinare il giorno visualizzato
+                const firstTs = chartData.timestamps[0];
+                const dataDate = new Date(firstTs * 1000);
+                dataDate.setHours(0, 0, 0, 0);
+                const dayStart = dataDate.getTime() / 1000;
                 const dayEnd = dayStart + 24 * 60 * 60;
 
                 uplot.setScale('x', { min: dayStart, max: dayEnd });
                 uplot.setScale('y', { min: 10, max: 32 });
                 uplot.setScale('y2', { min: 0, max: 100 });
-                uplot.setScale('y3', { min: 980, max: 1040 });
+                uplot.setScale('y3', { min: 970, max: 1020 });
+            }
+        }
+
+        // Pulsanti giorni della settimana
+        const giorniIniziali = ['L', 'M', 'M', 'G', 'V', 'S', 'D'];  // Lun-Dom
+        let availableDates = new Set();  // Date disponibili (YYYYMMDD)
+        let selectedDayOffset = 0;  // 0 = oggi, -1 = ieri, ... -6 = 6 giorni fa
+
+        // Inizializza i pulsanti dei giorni
+        function initDayButtons() {
+            const container = document.getElementById('dayButtons');
+            container.innerHTML = '';
+
+            const today = new Date();
+
+            // Crea 7 pulsanti: da -6 giorni (sinistra) a oggi (destra)
+            for (let offset = -6; offset <= 0; offset++) {
+                const date = new Date(today);
+                date.setDate(date.getDate() + offset);
+
+                // Ottieni il giorno della settimana (0=Dom, 1=Lun, ...)
+                const dayOfWeek = date.getDay();
+                // Converti a indice italiano (0=Lun, 6=Dom)
+                const italianIndex = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+
+                // Formatta data come YYYYMMDD
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                const dateStr = year + month + day;
+
+                const btn = document.createElement('button');
+                btn.className = 'day-btn';
+                btn.textContent = giorniIniziali[italianIndex];
+                btn.dataset.offset = offset;
+                btn.dataset.date = dateStr;
+                btn.title = day + '/' + month + '/' + year;
+
+                // Seleziona oggi di default
+                if (offset === 0) {
+                    btn.classList.add('selected');
+                }
+
+                btn.onclick = () => selectDay(offset, dateStr);
+                container.appendChild(btn);
+            }
+        }
+
+        // Aggiorna disponibilità pulsanti in base ai file storici
+        function updateDayButtonsAvailability() {
+            const buttons = document.querySelectorAll('.day-btn');
+            buttons.forEach(btn => {
+                const offset = parseInt(btn.dataset.offset);
+                const dateStr = btn.dataset.date;
+
+                // Oggi è sempre disponibile (live), gli altri dipendono dai file
+                if (offset === 0 || availableDates.has(dateStr)) {
+                    btn.classList.remove('unavailable');
+                } else {
+                    btn.classList.add('unavailable');
+                }
+            });
+        }
+
+        // Seleziona un giorno tramite pulsante
+        async function selectDay(offset, dateStr) {
+            // Se il giorno non è disponibile (eccetto oggi), ignora
+            if (offset !== 0 && !availableDates.has(dateStr)) {
+                return;
+            }
+
+            // Aggiorna selezione visiva
+            const buttons = document.querySelectorAll('.day-btn');
+            buttons.forEach(btn => btn.classList.remove('selected'));
+            const selectedBtn = document.querySelector(`.day-btn[data-offset="${offset}"]`);
+            if (selectedBtn) {
+                selectedBtn.classList.add('selected');
+            }
+
+            selectedDayOffset = offset;
+
+            // Sincronizza con stato calendario
+            const isToday = (offset === 0);
+            selectedDateStr = isToday ? null : dateStr;
+
+            // Aggiorna testo pulsante calendario
+            updateCalendarButtonText(dateStr, isToday);
+
+            if (isToday) {
+                await loadTodayData();
+            } else {
+                await loadHistoricalData(dateStr);
             }
         }
 
@@ -1128,7 +3132,22 @@
         });
 
         // Avvio
-        window.onload = loadTodayData;
+        window.onload = async function() {
+            // Carica configurazione (programmi e impostazioni)
+            await loadConfig();
+
+            // Inizializza pulsanti giorni
+            initDayButtons();
+
+            // Carica lista date disponibili
+            await loadAvailableDates();
+
+            // Aggiorna disponibilità pulsanti
+            updateDayButtonsAvailability();
+
+            // Carica dati di oggi
+            await loadTodayData();
+        };
     </script>
 </body>
 </html>

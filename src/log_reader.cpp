@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <dirent.h>
 #include <time.h>
 
 static const char *TAG = "LOG_READER";
@@ -276,6 +277,50 @@ esp_err_t log_current_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+esp_err_t log_list_handler(httpd_req_t *req)
+{
+    ESP_LOGI(TAG, "Listing available log files");
+
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_sendstr_chunk(req, "[");
+
+    DIR *dir = opendir("/spiffs");
+    if (dir == NULL) {
+        ESP_LOGE(TAG, "Failed to open /spiffs directory");
+        httpd_resp_sendstr_chunk(req, "]");
+        httpd_resp_sendstr_chunk(req, NULL);
+        return ESP_OK;
+    }
+
+    struct dirent *entry;
+    bool first = true;
+    char json_buf[64];
+
+    while ((entry = readdir(dir)) != NULL) {
+        // Cerca file con pattern log_YYYYMMDD.bin
+        if (strncmp(entry->d_name, "log_", 4) == 0 &&
+            strstr(entry->d_name, ".bin") != NULL) {
+
+            // Estrai la data dal nome file
+            char date_str[9] = {0};
+            strncpy(date_str, entry->d_name + 4, 8);
+
+            // Formatta come JSON entry
+            snprintf(json_buf, sizeof(json_buf), "%s\"%s\"",
+                     first ? "" : ",", date_str);
+            httpd_resp_sendstr_chunk(req, json_buf);
+            first = false;
+        }
+    }
+
+    closedir(dir);
+
+    httpd_resp_sendstr_chunk(req, "]");
+    httpd_resp_sendstr_chunk(req, NULL);
+
+    return ESP_OK;
+}
+
 esp_err_t register_log_handlers(httpd_handle_t server)
 {
     if (!server) {
@@ -325,6 +370,20 @@ esp_err_t register_log_handlers(httpd_handle_t server)
         return ret;
     }
 
-    ESP_LOGI(TAG, "Log API handlers registered (JSON + Binary + Current)");
+    // Registra handler lista log
+    httpd_uri_t log_list_uri = {
+        .uri = "/api/log/list",
+        .method = HTTP_GET,
+        .handler = log_list_handler,
+        .user_ctx = NULL
+    };
+
+    ret = httpd_register_uri_handler(server, &log_list_uri);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to register /api/log/list handler: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
+    ESP_LOGI(TAG, "Log API handlers registered (JSON + Binary + Current + List)");
     return ESP_OK;
 }

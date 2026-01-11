@@ -1,5 +1,4 @@
 {
-
   "network": {
     "wifi": {
       "ssid": "YOUR_WIFI_SSID",
@@ -15,7 +14,6 @@
     "http_server": {
       "max_handlers": 16
     }
-
   },
   "thermostat": {
     "temperature": {
@@ -28,22 +26,16 @@
     "pressure": {
       "correction_offset": 0
     },
-
     "modes": {
       "current_mode": "auto",
       "current_state": "on"
     }
   },
   "schedule": {
-    "enabled": true,
-    "slot_duration_minutes": 30,
-    "slots_per_day": 48,
-    "temperature_unit": "celsius_tenths",
     "programs": [
       {
         "id": 0,
         "name": "Standard",
-        "description": "Temperatura standard settimanale",
         "slots": [
           160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 190, 190,
           210, 210, 210, 210, 210, 210, 210, 210, 210, 210, 210, 210, 210, 210, 210, 210,
@@ -53,7 +45,6 @@
       {
         "id": 1,
         "name": "Sabato",
-        "description": "Programmazione per il sabato",
         "slots": [
           160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
           180, 180, 200, 200, 210, 210, 210, 210, 210, 210, 210, 210, 210, 210, 210, 210,
@@ -63,7 +54,6 @@
       {
         "id": 2,
         "name": "Domenica",
-        "description": "Programmazione per la domenica",
         "slots": [
           160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
           180, 180, 200, 200, 210, 210, 210, 210, 210, 210, 210, 210, 210, 210, 210, 210,
@@ -73,7 +63,6 @@
       {
         "id": 3,
         "name": "Assente",
-        "description": "Casa vuota",
         "slots": [
           150, 150, 150, 150, 150, 150, 150, 150, 150, 150, 150, 150, 150, 150, 150, 150,
           150, 150, 150, 150, 150, 150, 150, 150, 150, 150, 150, 150, 150, 150, 150, 150,
@@ -82,16 +71,34 @@
       },
       {
         "id": 4,
-        "name": "Speciale",
-        "description": "Programmazione periodo speciale",
+        "name": "Vacanza",
         "slots": [
           180, 180, 180, 180, 180, 180, 180, 180, 180, 180, 180, 180, 180, 180, 200, 200,
           210, 210, 210, 210, 210, 210, 210, 210, 210, 210, 210, 210, 210, 210, 210, 210,
           210, 210, 210, 210, 210, 210, 200, 200, 190, 190, 180, 180, 180, 180, 180, 180
         ]
+      },
+      {
+        "id": 5,
+        "name": "Extra1",
+        "slots": [
+          170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 190, 190,
+          200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200,
+          200, 200, 190, 190, 180, 180, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170
+        ]
+      },
+      {
+        "id": 6,
+        "name": "Extra2",
+        "slots": [
+          160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 180, 180,
+          190, 190, 190, 190, 190, 190, 190, 190, 190, 190, 190, 190, 190, 190, 190, 190,
+          190, 190, 180, 180, 170, 170, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160
+        ]
       }
     ],
-
+    "mode": "weekly",
+    "fixed_program": 0,
     "weekly_schedule": {
       "monday": 0,
       "tuesday": 0,
@@ -101,6 +108,14 @@
       "saturday": 1,
       "sunday": 2
     },
+    "override_today": {
+      "enabled": false,
+      "program_id": 0
+    },
+    "override_tomorrow": {
+      "enabled": false,
+      "program_id": 0
+    },
     "exception": {
       "enabled": false,
       "start_date": "",
@@ -108,7 +123,6 @@
       "program_id": 4
     }
   },
-
   "display": {
     "brightness": 100,
     "screensaver": {

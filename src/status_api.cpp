@@ -30,11 +30,11 @@ esp_err_t status_handler(httpd_req_t *req)
     // Costruisci risposta JSON con data/ora
     char json[192];
     int len = snprintf(json, sizeof(json),
-        "{\"temp\":%.2f,\"hum\":%d,\"press\":%d,\"setpoint\":%.1f,\"heat\":%d,\"samples\":%d,"
+        "{\"temp\":%.2f,\"hum\":%d,\"press\":%.1f,\"setpoint\":%.1f,\"heat\":%d,\"samples\":%d,"
         "\"year\":%d,\"month\":%d,\"day\":%d,\"hour\":%d,\"min\":%d,\"sec\":%d,\"wday\":%d}",
         g_state.current_temperature,
         g_state.current_humidity,
-        g_state.current_pressure,
+        g_state.current_pressure / 10.0f,  // Converti da decimi a hPa
         g_state.active_setpoint,
         g_state.relay_state ? 1 : 0,
         sample_count,

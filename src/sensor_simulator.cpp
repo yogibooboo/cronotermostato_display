@@ -120,8 +120,8 @@ uint8_t sensor_sim_get_humidity(void)
 
 uint16_t sensor_sim_get_pressure(void)
 {
-    // Restituisce intero hPa (arrotondato)
-    return (uint16_t)((s_state.pressure_centesimi + 50) / 100);
+    // Restituisce decimi di hPa (es. 10132 = 1013.2 hPa)
+    return (uint16_t)((s_state.pressure_centesimi + 5) / 10);
 }
 
 bool sensor_sim_get_heater_state(void)

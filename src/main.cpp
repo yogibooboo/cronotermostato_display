@@ -83,7 +83,6 @@ static void status_task(void *pvParameters)
     vTaskDelay(pdMS_TO_TICKS(2000));
 
     static int last_minute = -1;  // Per rilevare cambio minuto
-    static int save_counter = 0;  // Contatore per salvataggio su flash
 
     while (1) {
         // Ottieni ora corrente
@@ -110,7 +109,7 @@ static void status_task(void *pvParameters)
             if (bme280_read(&sensor_data) == ESP_OK && sensor_data.valid) {
                 temperature = sensor_data.temperature + g_config.temp_correction;
                 humidity = (uint8_t)sensor_data.humidity;
-                pressure = (uint16_t)sensor_data.pressure;
+                pressure = (uint16_t)(sensor_data.pressure * 10.0f);  // Decimi di hPa
 
                 // Controllo caldaia con isteresi
                 static bool last_heater_state = false;
@@ -167,9 +166,8 @@ static void status_task(void *pvParameters)
                          temperature, humidity, pressure);
             }
 
-            // Salva su flash ogni ora (60 minuti)
-            if (++save_counter >= 60) {
-                save_counter = 0;
+            // Salva su flash alle ore intere (minuto 0)
+            if (timeinfo.tm_min == 0) {
                 history_save_to_file();
             }
         }
